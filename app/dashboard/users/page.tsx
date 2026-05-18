@@ -251,7 +251,7 @@ export default function UsersPage() {
           <div className="grid gap-4 py-4">
             <div>
               <Label className="text-base font-medium">
-                Assign roles to {selectedUser ? `${selectedUser.name || ''} ${selectedUser.surname || ''}`.trim() : selectedUser?.email}
+                Assign roles to {selectedUser ? (`${selectedUser.name || ''} ${selectedUser.surname || ''}`.trim() || selectedUser.email) : 'this user'}
               </Label>
             </div>
             <div className="space-y-2">
