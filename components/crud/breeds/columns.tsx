@@ -100,9 +100,10 @@ export const columns: ColumnDef<Breed>[] = [
     ),
     cell: ({ row }) => {
       const created_at = row.getValue("created_at") as string
+      const date = new Date(created_at)
       return (
         <div>
-          {new Date(created_at).toLocaleDateString()}
+          {date.toISOString().slice(0, 10)}
         </div>
       )
     },
