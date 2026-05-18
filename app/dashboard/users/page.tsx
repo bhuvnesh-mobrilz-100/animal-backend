@@ -178,6 +178,10 @@ export default function UsersPage() {
     );
   });
 
+  const selectedUserDisplayName = selectedUser
+    ? `${selectedUser.name || ''} ${selectedUser.surname || ''}`.trim() || selectedUser.email
+    : "";
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -251,7 +255,7 @@ export default function UsersPage() {
           <div className="grid gap-4 py-4">
             <div>
               <Label className="text-base font-medium">
-                Assign roles to {selectedUser ? `${selectedUser.name || ''} ${selectedUser.surname || ''}`.trim() : selectedUser?.email}
+                Assign roles to {selectedUserDisplayName}
               </Label>
             </div>
             <div className="space-y-2">
