@@ -10,7 +10,8 @@ function resolvePathParams(request: NextRequest, params?: { table?: string; id?:
   };
 }
 
-export async function GET(request: NextRequest, { params }: { params: { table: string; id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ table: string; id: string }> }) {
+  const params = await context.params;
   const { table, id } = resolvePathParams(request, params);
   const invalid = validateTable(table);
   if (invalid) return invalid;
@@ -25,7 +26,8 @@ export async function GET(request: NextRequest, { params }: { params: { table: s
   return NextResponse.json({ data });
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { table: string; id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ table: string; id: string }> }) {
+  const params = await context.params;
   const { table, id } = resolvePathParams(request, params);
   const invalid = validateTable(table);
   if (invalid) return invalid;
@@ -45,7 +47,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { table:
   return NextResponse.json({ data });
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { table: string; id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ table: string; id: string }> }) {
+  const params = await context.params;
   const { table, id } = resolvePathParams(request, params);
   const invalid = validateTable(table);
   if (invalid) return invalid;
