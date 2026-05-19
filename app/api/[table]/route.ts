@@ -5,10 +5,14 @@ function resolveTable(request: NextRequest, params?: { table?: string }) {
   return params?.table ?? request.nextUrl.pathname.split('/').filter(Boolean).pop();
 }
 
-export async function GET(request: NextRequest, { params }: { params: { table: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ table: string }> }) {
+  const params = await context.params;
   const table = resolveTable(request, params);
   const invalid = validateTable(table);
-  if (invalid || !table) return invalid;
+  if (invalid) return invalid;
+  if (!table) {
+    return NextResponse.json({ error: 'Table parameter is required' }, { status: 400 });
+  }
 
   const query = await buildTableQuery(table, request.nextUrl.searchParams);
   const { data, error } = await query;
@@ -20,10 +24,14 @@ export async function GET(request: NextRequest, { params }: { params: { table: s
   return NextResponse.json({ data });
 }
 
-export async function POST(request: NextRequest, { params }: { params: { table: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ table: string }> }) {
+  const params = await context.params;
   const table = resolveTable(request, params);
   const invalid = validateTable(table);
-  if (invalid || !table) return invalid;
+  if (invalid) return invalid;
+  if (!table) {
+    return NextResponse.json({ error: 'Table parameter is required' }, { status: 400 });
+  }
 
   const payload = await request.json();
   if (!payload || (Array.isArray(payload) ? payload.length === 0 : Object.keys(payload).length === 0)) {
