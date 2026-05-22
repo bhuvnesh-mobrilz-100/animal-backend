@@ -39,7 +39,7 @@ export function TransactionsCrud() {
         .from("transactions")
         .select(`
           *,
-          user:users(user_id, name, surname, email)
+          user:users(user_id, user_name, email)
         `)
         .order("created_at", { ascending: false })
 

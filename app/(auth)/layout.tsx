@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function AuthLayout({
@@ -9,13 +9,14 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { userDetails, session, loading } = useAuth();
+  const { session, loading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (!loading && session) {
-      redirect(`/`);
+      router.replace(`/dashboard`);
     }
-  }, [session, loading]);
+  }, [session, loading, router]);
 
   return <div className="flex flex-col min-h-screen">{children}</div>;
 }

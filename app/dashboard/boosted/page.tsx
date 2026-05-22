@@ -8,12 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Zap, Plus, Search, Edit, Trash2, Calendar, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface BoostUser {
-  user_id: number;
-  user_name: string;
-  email: string;
-}
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,10 +32,10 @@ interface EntityBoost {
     price: number;
     description: string;
   };
-  users?: {
+  users: {
     user_name: string;
     email: string;
-  } | null;
+  };
   vets?: {
     name: string;
   };
@@ -95,7 +89,7 @@ export default function BoostedPage() {
 
   const fetchBoosts = async () => {
     try {
-      const { data: boostData, error: boostError } = await supabase
+      const { data, error } = await supabase
         .from("entity_boosts")
         .select(`
           *,
@@ -104,39 +98,28 @@ export default function BoostedPage() {
             duration_days,
             price,
             description
+          ),
+          users (
+            user_name,
+            email
+          ),
+          vets (
+            name
+          ),
+          breeders (
+            name
+          ),
+          pet_friendly_places (
+            name
+          ),
+          service_providers (
+            name
           )
         `)
         .order("created_at", { ascending: false });
 
-      if (boostError) throw boostError;
-
-      const boostsWithUsers = (boostData || []) as EntityBoost[];
-      const userIds = Array.from(
-        new Set(boostsWithUsers.map((boost) => boost.user_id).filter(Boolean))
-      );
-
-      if (userIds.length > 0) {
-        const { data: usersData, error: usersError } = await supabase
-          .from("users")
-          .select("user_id, user_name, email")
-          .in("user_id", userIds);
-
-        if (usersError) throw usersError;
-
-        const usersMap = new Map<number, BoostUser>();
-        (usersData || []).forEach((user: BoostUser) => {
-          usersMap.set(user.user_id, user);
-        });
-
-        setBoosts(
-          boostsWithUsers.map((boost) => ({
-            ...boost,
-            users: usersMap.get(boost.user_id) || null,
-          }))
-        );
-      } else {
-        setBoosts(boostsWithUsers);
-      }
+      if (error) throw error;
+      setBoosts(data || []);
     } catch (error) {
       console.error("Error fetching boosts:", error);
       toast({
@@ -295,22 +278,10 @@ export default function BoostedPage() {
   };
 
   const getEntityName = (boost: EntityBoost) => {
-    const entity = entities.find((entity) => {
-      return (
-        (boost.vet_id && entity.type === "vet" && entity.id === boost.vet_id) ||
-        (boost.breeder_id && entity.type === "breeder" && entity.id === boost.breeder_id) ||
-        (boost.pet_friendly_place_id && entity.type === "pet_friendly_place" && entity.id === boost.pet_friendly_place_id) ||
-        (boost.service_provider_id && entity.type === "service_provider" && entity.id === boost.service_provider_id)
-      );
-    });
-
-    if (entity) return entity.name;
-
     if (boost.vets) return boost.vets.name;
     if (boost.breeders) return boost.breeders.name;
     if (boost.pet_friendly_places) return boost.pet_friendly_places.name;
     if (boost.service_providers) return boost.service_providers.name;
-
     return "Unknown Entity";
   };
 

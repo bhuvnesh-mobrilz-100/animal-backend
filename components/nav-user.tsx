@@ -34,26 +34,34 @@ import { usePathname, useRouter } from "next/navigation";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
-  const { userDetails, roles,logOutFunction } = useAuth();
+  const { userDetails, roles, logOutFunction } = useAuth();
   const [initials, setInitials] = useState("");
   const router = useRouter();
   const path = usePathname();
+  const displayName =
+    userDetails?.fullname || userDetails?.user_id || "User";
+  const displayRole = roles.map((role) => role.name).join(", ");
+  const displaySubtitle = displayRole || "Role not set";
 
   useEffect(() => {
     if (userDetails) {
-      var initialData = getInitials(userDetails.fullname);
+      const initialData = getInitials(
+        userDetails.fullname || userDetails.user_id || "User"
+      );
       setInitials(initialData);
     }
   }, [userDetails]);
 
   function getInitials(fullName: any) {
-    if (!fullName || typeof fullName !== "string") return "";
+    if (!fullName || typeof fullName !== "string") return "U";
 
-    return fullName
+    const initials = fullName
       .trim()
       .split(/\s+/) // split by any whitespace
       .map((word) => word[0].toUpperCase())
       .join("");
+
+    return initials || "U";
   }
 
   const logOut = () => {
@@ -97,15 +105,16 @@ export function NavUser() {
               <Avatar className="h-8 w-8 rounded-lg grayscale">
                 <AvatarImage
                   src={userDetails?.profileImageUrl}
-                  alt={userDetails?.fullname}
+                  alt={displayName}
                 />
                 <AvatarFallback className="rounded-lg">
-                  {initials}
+                  {initials || displayName.slice(0, 1).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight ">
-                <span className="truncate font-medium">
-                  {userDetails?.fullname}
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">{displayName}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {displaySubtitle}
                 </span>
               </div>
               <MoreVerticalIcon className="ml-auto size-4" />
@@ -129,12 +138,12 @@ export function NavUser() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">
-                    {userDetails?.fullname}
-                  </span>
-                  {/* <span className="truncate text-xs text-muted-foreground">
-                    {user.email}
-                  </span> */}
+                  <span className="truncate font-medium">{displayName}</span>
+                  {displaySubtitle && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {displaySubtitle}
+                    </span>
+                  )}
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -160,7 +169,11 @@ export function NavUser() {
                   Dashboard
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  router.push("/dashboard/account");
+                }}
+              >
                 <UserCircleIcon />
                 Account
               </DropdownMenuItem>
@@ -173,6 +186,14 @@ export function NavUser() {
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            {displayRole && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 pb-1 text-xs text-muted-foreground">
+                  Role: {displayRole}
+                </div>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logOut}>
               <LogOutIcon />

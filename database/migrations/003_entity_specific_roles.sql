@@ -80,11 +80,7 @@ ON CONFLICT (name) DO NOTHING;
 -- =============================
 -- 4. INSERT ADDITIONAL ROLES (IF NOT EXISTS)
 -- =============================
-INSERT INTO public.roles (name, description, is_system_role) VALUES
-('Staff', 'Staff member access', false),
-('Owner', 'Entity owner access', false),
-('Moderator', 'Content moderation access', false)
-ON CONFLICT (name) DO NOTHING;
+-- No additional roles inserted here; role set is centralized in migration 001.
 
 -- =============================
 -- 5. ASSIGN MANAGER PERMISSIONS (UPDATED)
@@ -110,23 +106,12 @@ ON CONFLICT DO NOTHING;
 -- =============================
 -- 7. ASSIGN STAFF PERMISSIONS
 -- =============================
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM public.roles r, public.permissions p
-WHERE r.name = 'Staff' AND (
-  p.resource IN ('breeder', 'vet', 'service_provider', 'pet_friendly_place') AND 
-  p.action IN ('read', 'update')
-)
-ON CONFLICT DO NOTHING;
+-- 'Staff' role removed from canonical set; skip staff permission assignments.
 
 -- =============================
 -- 8. ASSIGN MODERATOR PERMISSIONS
 -- =============================
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM public.roles r, public.permissions p
-WHERE r.name = 'Moderator' AND p.resource IN ('posts', 'reviews', 'help_requests')
-ON CONFLICT DO NOTHING;
+-- 'Moderator' role removed from canonical set; skip moderator assignments.
 
 -- =============================
 -- 9. CREATE INDEXES

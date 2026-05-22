@@ -8,8 +8,7 @@ export interface Transaction {
   object: any;
   user?: {
     user_id: number;
-    name: string;
-    surname: string;
+    user_name: string;
     email: string;
   };
 }

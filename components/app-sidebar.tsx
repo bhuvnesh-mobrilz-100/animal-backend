@@ -22,13 +22,11 @@ import {
   FileCodeIcon,
   FileIcon,
   FileTextIcon,
-  FolderIcon,
   GitGraphIcon,
   GroupIcon,
   HelpCircleIcon,
   LayoutDashboardIcon,
   ListIcon,
-  ReceiptIcon,
   ReceiptTextIcon,
   SearchIcon,
   Settings2Icon,
@@ -60,6 +58,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import Image from "next/image";
+import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 
 const data = {
@@ -73,67 +72,116 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: LayoutDashboardIcon,
-      role_id: 2,
-      vendor: false,
+      permissions: ["dashboard.view"],
+      roles: ["Owner", "Admin", "Manager", "Approver", "Provider", "Subscriber"],
     },
     {
       title: "Breeds",
       url: "/dashboard/breeds",
       icon: DatabaseIcon,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin", "Manager"],
     },
     {
       title: "Service Categories",
       url: "/dashboard/service-categories",
       icon: DatabaseIcon,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin", "Manager"],
     },
     {
       title: "Service Providers",
       url: "/dashboard/service-providers",
       icon: UsersIcon,
-      role_id: 2,
-      vendor: false,
-      items:[
-        
-      ]
+      permissions: ["service_providers.view"],
+      roles: ["Owner", "Admin", "Manager", "Provider"],
+      items: [],
     },
     {
       title: "Animal Types",
       url: "/dashboard/animal-types",
       icon: DatabaseIcon,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin", "Manager"],
     },
     {
       title: "Event Categories",
       url: "/dashboard/event-categories",
       icon: Calendar,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin", "Manager", "Approver"],
     },
     {
       title: "Events",
       url: "/dashboard/events",
       icon: Calendar,
-      role_id: 2,
-      vendor: false,
+      permissions: ["events.view"],
+      roles: ["Owner", "Admin", "Manager", "Approver", "Subscriber", "Provider"],
     },
     {
       title: "Users",
       url: "/dashboard/users",
       icon: UserCog,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin"],
     },
     {
       title: "Roles",
       url: "/dashboard/roles",
       icon: Settings2Icon,
-      role_id: 2,
-      vendor: false,
+      roles: ["Owner", "Admin"],
+    },
+    {
+      title: "Member Management",
+      url: "/dashboard/member-management",
+      icon: GroupIcon,
+      roles: ["Owner", "Admin", "Manager"],
+    },
+    {
+      title: "Payments & Billing",
+      url: "/dashboard/payments-billing",
+      icon: CreditCardIcon,
+      roles: ["Owner", "Admin"],
+    },
+    {
+      title: "Pet Friendly Places",
+      url: "/dashboard/pet-friendly-places",
+      icon: Building2,
+      permissions: ["pet_friendly_places.view"],
+      roles: ["Owner", "Admin", "Manager", "Provider"],
+    },
+    {
+      title: "Reports",
+      url: "/dashboard/reports",
+      icon: BarChartIcon,
+      permissions: ["reports.view"],
+      roles: ["Owner", "Admin", "Manager", "Approver"],
+    },
+    {
+      title: "Boost Packages",
+      url: "/dashboard/boost-packages",
+      icon: Package,
+      roles: ["Owner", "Admin", "Provider"],
+    },
+    {
+      title: "Boosted",
+      url: "/dashboard/boosted",
+      icon: Zap,
+      roles: ["Owner", "Admin", "Provider"],
+    },
+    {
+      title: "Transactions",
+      url: "/dashboard/transactions",
+      icon: Wallet,
+      roles: ["Owner", "Admin"],
+    },
+    {
+      title: "Analytics",
+      url: "/dashboard/analytics",
+      icon: BarChartIcon,
+      permissions: ["analytics.view"],
+      roles: ["Owner", "Admin", "Manager", "Approver", "Provider"],
+    },
+    {
+      title: "Veterinarians",
+      url: "/dashboard/veterinarians",
+      icon: Stethoscope,
+      roles: ["Owner", "Admin", "Manager", "Provider"],
     },
   ],
   navClouds: [
@@ -237,19 +285,57 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mainNavData, setMainNavData] = useState<any>([]);
+  const [secondaryNavData, setSecondaryNavData] = useState<any>([]);
   const {
     selected_vendor,
     loading,
-    hasRole,
+    roles,
+    permissions,
     selected_roles,
     selected_vendor_location_id,
   } = useAuth();
+
+  const userRoleNames = roles.map((role) => role.name).filter(Boolean);
+  const normalizedUserRoleNames = userRoleNames.map((roleName) => roleName.toLowerCase());
+  const normalizedUserPermissions = permissions.map((permission) => permission.toLowerCase());
+  const hasRole = (roleName: string) => normalizedUserRoleNames.includes(roleName.toLowerCase());
+  const hasPermission = (permissionName: string) =>
+    normalizedUserPermissions.includes(permissionName.toLowerCase());
+  const isOwner = hasRole("Owner");
+  const canAccessNavItem = (item: any) => {
+    const matchesPermission = Array.isArray(item.permissions)
+      ? item.permissions.some((permissionName: string) => hasPermission(permissionName))
+      : false;
+    const matchesRole = Array.isArray(item.roles)
+      ? item.roles.some((roleName: string) => hasRole(roleName))
+      : true;
+
+    return matchesPermission || matchesRole;
+  };
+
+  const canAccessSecondaryItem = (title: string) => {
+    if (isOwner) return true;
+
+    if (title === "Transactions") {
+      return hasRole("Admin") || hasPermission("transactions.view");
+    }
+
+    if (title === "Boosted Items" || title === "Boost Packages") {
+      return hasRole("Admin") || hasRole("Provider") || hasPermission("boosters.view");
+    }
+
+    if (title === "View Analytics") {
+      return hasRole("Admin") || hasRole("Manager") || hasRole("Approver") || hasRole("Provider") || hasPermission("analytics.view");
+    }
+
+    return true;
+  };
 
   useEffect(() => {
     if (!loading) {
       setupListOfTabItems();
     }
-  }, [loading]);
+  }, [loading, roles]);
 
   var setupListOfTabItems = async () => {
     try {
@@ -262,7 +348,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       if (error) {
         console.error("Error fetching service categories:", error);
-        setMainNavData(data.navMain);
+        const filteredNavMain =
+          roles.length === 0
+            ? data.navMain.filter((item) => item.title === "Dashboard")
+            : data.navMain.filter(
+                (item) =>
+                  isOwner ||
+                  !item.roles ||
+                  item.roles.some((roleName: string) => hasRole(roleName))
+              );
+        setMainNavData(filteredNavMain.length > 0 ? filteredNavMain : data.navMain.filter((item) => item.title === "Dashboard"));
+        
+        // Filter secondary items based on user roles
+        const filteredSecondary = getFilteredSecondaryItems(filteredNavMain.length > 0 ? filteredNavMain : data.navMain.filter((item) => item.title === "Dashboard"));
+        setSecondaryNavData(filteredSecondary);
         return;
       }
 
@@ -271,7 +370,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         serviceCategories?.map((category) => ({
           title: category.name,
           url: `/dashboard/service-providers/${category.service_category_id}`,
-          icon: category.icon || "🏢", // Use the icon from database or default emoji
+          icon: category.icon || "🏢",
         })) || [];
 
       // Update the Service Providers item with the service categories as children
@@ -285,11 +384,68 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         return item;
       });
 
-      setMainNavData(updatedNavMain);
+      const filteredNavMain =
+        roles.length === 0
+          ? updatedNavMain.filter((item) => item.title === "Dashboard")
+          : updatedNavMain.filter(
+              (item) =>
+                isOwner ||
+                canAccessNavItem(item)
+            );
+
+      const fallbackNavMain =
+        filteredNavMain.length > 0
+          ? filteredNavMain
+          : updatedNavMain.filter((item) => item.title === "Dashboard");
+
+      setMainNavData(fallbackNavMain);
+      
+      // Filter secondary items to remove duplicates and apply role-based filtering
+      const filteredSecondary = getFilteredSecondaryItems(fallbackNavMain);
+      setSecondaryNavData(filteredSecondary);
+      
     } catch (error) {
       console.error("Error setting up navigation:", error);
-      setMainNavData(data.navMain);
+      const filteredNavMain =
+        roles.length === 0
+          ? data.navMain.filter((item) => item.title === "Dashboard")
+          : data.navMain.filter(
+              (item) =>
+                isOwner ||
+                canAccessNavItem(item)
+            );
+      const fallbackNavMain =
+        filteredNavMain.length > 0
+          ? filteredNavMain
+          : data.navMain.filter((item) => item.title === "Dashboard");
+
+      setMainNavData(fallbackNavMain);
+      
+      const filteredSecondary = getFilteredSecondaryItems(fallbackNavMain);
+      setSecondaryNavData(filteredSecondary);
     }
+  };
+  
+  // Helper function to filter secondary navigation items
+  const getFilteredSecondaryItems = (mainNav: any[]) => {
+    // Create a set of URLs and titles from main navigation for quick lookup
+    const mainNavUrls = new Set(mainNav.map(item => item.url));
+    const mainNavTitles = new Set(mainNav.map(item => item.title));
+    
+    // Filter secondary items
+    return data.navSecondary.filter(secondaryItem => {
+      const hasAccess = canAccessSecondaryItem(secondaryItem.title);
+      
+      // Remove duplicate items that already exist in main navigation
+      const isDuplicate = mainNavUrls.has(secondaryItem.url) || 
+                         mainNavTitles.has(secondaryItem.title) ||
+                         secondaryItem.title === "Transactions" && mainNavTitles.has("Transactions") ||
+                         secondaryItem.title === "Boosted Items" && mainNavTitles.has("Boosted") ||
+                         secondaryItem.title === "Boost Packages" && mainNavTitles.has("Boost Packages") ||
+                         secondaryItem.title === "View Analytics" && mainNavTitles.has("Analytics");
+      
+      return !isDuplicate && hasAccess;
+    });
   };
 
   return (
@@ -301,7 +457,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <div className="flex items-center gap-2 p-4 border-b">
+              <Link href="/dashboard" className="flex items-center gap-2 p-4 border-b">
                 {!selected_vendor && !loading && (
                   <>
                     <Image
@@ -323,18 +479,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       height={32}
                       className="h-8 w-auto"
                     />
-                    {/* <span className="text-xl font-bold capitalize">{selected_vendor.name}</span> */}
                   </>
                 )}
-              </div>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+      
       <SidebarContent>
         <NavMain items={mainNavData} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavSecondary items={secondaryNavData} className="mt-auto" />
       </SidebarContent>
+      
       <SidebarFooter>
         <NavUser />
       </SidebarFooter>

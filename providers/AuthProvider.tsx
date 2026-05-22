@@ -2,11 +2,14 @@
 import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { Session } from "@supabase/supabase-js";
-import { usePathname, useRouter, redirect } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { storage } from "../lib/storage";
 
 type Role = {
   role_id: number;
+  name: string;
+  description?: string | null;
+  is_system_role?: boolean | null;
   vendor_id: number | null;
   vendor_location_id: number | null;
   vendors: {
@@ -33,6 +36,8 @@ type AuthData = {
     fullname: string;
     profileImageUrl: string;
     user_id: string | null;
+    roleNames: string[];
+    permissions: string[];
   } | null;
   selected_vendor: {
     vendor_id: number;
@@ -43,12 +48,13 @@ type AuthData = {
   selected_roles: number[];
   selected_vendor_location_id: number | null;
   roles: Role[];
-  updateSelectedRoles: Function;
-  updateSelectedVendor: Function;
-  updateSelectedVendorLocation: Function;
-  logOutFunction: Function;
-  updateUserDetails: Function;
-  hasRole: Function;
+  permissions: string[];
+  updateSelectedRoles: (selectedRoles: number[]) => void;
+  updateSelectedVendor: (selectedVendor: any) => void;
+  updateSelectedVendorLocation: (location_id: number) => void;
+  logOutFunction: () => Promise<unknown>;
+  updateUserDetails: (userData: any) => void;
+  hasRole: (args: { requiredRoleId: number }) => boolean;
 };
 
 const AuthContext = createContext<AuthData>({
@@ -58,13 +64,14 @@ const AuthContext = createContext<AuthData>({
   selected_vendor: null,
   selected_vendor_location_id: null,
   roles: [],
+  permissions: [],
   selected_roles: [],
   updateSelectedRoles: () => {},
   updateSelectedVendor: () => {},
   updateSelectedVendorLocation: () => {},
-  logOutFunction: () => {},
+  logOutFunction: async () => null,
   updateUserDetails: () => {},
-  hasRole: () => {},
+  hasRole: () => false,
 });
 
 export default function AuthProvider({ children }: any) {
@@ -84,10 +91,13 @@ export default function AuthProvider({ children }: any) {
     fullname: string;
     profileImageUrl: string;
     user_id: string | null;
+    roleNames: string[];
+    permissions: string[];
   } | null>(null);
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [selected_roles, setSelected_roles] = useState<number[]>([]);
+  const [permissions, setPermissions] = useState<string[]>([]);
 
   const router = useRouter();
   const path = usePathname();
@@ -99,54 +109,64 @@ export default function AuthProvider({ children }: any) {
   useEffect(() => {
     const isProtectedRoute = protectedRoutes.some(route => path.startsWith(route));
     if (isProtectedRoute && !loading && !session) {
-      redirect(`/login`);
+      router.replace(`/login`);
     }
-  }, [loading, session, path]);
-
-  const getRoles = async (userId: number) => {
-    try {
-      const { data: user_roles, error } = await supabase
-        .from("user_roles")
-        .select("role_id, user_id")
-        .eq("user_id", userId);
-
-      if (!error && user_roles?.length) {
-        // Transform data to match Role type
-        const transformedRoles: Role[] = user_roles.map((role: any) => ({
-          role_id: role.role_id,
-          vendor_id: null,
-          vendor_location_id: null,
-          vendors: null
-        }));
-        
-        setRoles(transformedRoles);
-        // Set default roles for non-vendor users
-        setSelected_roles(user_roles.map((role: any) => role.role_id));
-      } else {
-        setRoles([]);
-      }
-    } catch (error) {
-      console.error("Error fetching roles:", error);
-      setRoles([]);
-    }
-  };
+  }, [loading, session, path, router]);
 
   const fetchSession = async (newSession: Session | null) => {
     try {
       if (newSession?.user?.id) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("user_name,user_id")
-          .eq("actual_user_id", newSession.user.id)
-          .single();
+        const requestHeaders: HeadersInit = {};
+        if (newSession.access_token) {
+          requestHeaders.Authorization = `Bearer ${newSession.access_token}`;
+        }
 
-        if (userData) {
+        const response = await fetch("/api/v1/auth/me", {
+          cache: "no-store",
+          headers: requestHeaders,
+        });
+
+        const payload = await response.json();
+
+        if (response.ok && payload.profile) {
+          const profile = payload.profile;
+          const profileRoles = profile.user_roles || [];
+          const profilePermissions = (profile.permissions || payload.permissions || [])
+            .map((permission: any) => permission?.name)
+            .filter(Boolean);
+          const normalizedRoles = profileRoles.length > 0
+            ? profileRoles
+            : (payload.roleNames || []).map((roleName: string, index: number) => ({
+                role_id: payload.roleIds?.[index] ?? index + 1,
+                roles: { role_id: payload.roleIds?.[index] ?? index + 1, name: roleName },
+              }));
           setUserDetails({
-            fullname: `${userData.user_name}`,
-            profileImageUrl: "",
-            user_id: userData.user_id,
+            fullname: `${profile.user_name || profile.name || "User"}`,
+            profileImageUrl: profile.avatar_url || "",
+            user_id: profile.user_id,
+            roleNames: (payload.roleNames || normalizedRoles.map((role: any) => role.roles?.name).filter(Boolean)) as string[],
+            permissions: profilePermissions,
           });
-          await getRoles(userData.user_id);
+
+          const transformedRoles: Role[] = profileRoles.map((role: any) => ({
+            role_id: role.role_id,
+            name: role.roles?.name || "Unknown",
+            vendor_id: null,
+            vendor_location_id: null,
+            vendors: null,
+          }));
+
+          const transformedFallbackRoles: Role[] = normalizedRoles.map((role: any) => ({
+            role_id: role.role_id,
+            name: role.roles?.name || role.name || "Unknown",
+            vendor_id: null,
+            vendor_location_id: null,
+            vendors: null,
+          }));
+
+          setRoles(transformedRoles.length > 0 ? transformedRoles : transformedFallbackRoles);
+          setSelected_roles((profileRoles.length > 0 ? profileRoles : normalizedRoles).map((role: any) => role.role_id));
+          setPermissions(profilePermissions);
 
           // Load non-auth data securely
           const storedVendor = storage.get("selected_vendor");
@@ -159,6 +179,9 @@ export default function AuthProvider({ children }: any) {
             setSelected_vendor_location_id(storedLocationId);
         } else {
           setUserDetails(null);
+          setRoles([]);
+          setSelected_roles([]);
+          setPermissions([]);
         }
 
         setSession(newSession);
@@ -168,6 +191,7 @@ export default function AuthProvider({ children }: any) {
         setRoles([]);
         setSelected_vendor(null);
         setSelected_roles([]);
+        setPermissions([]);
         setSelected_vendor_location_id(null);
 
         // Clear secure local storage
@@ -180,6 +204,21 @@ export default function AuthProvider({ children }: any) {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_OUT") {
+        void fetchSession(null);
+        return;
+      }
+
+      void fetchSession(nextSession);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Simple auth initialization - just check session once
   useEffect(() => {
@@ -199,18 +238,49 @@ export default function AuthProvider({ children }: any) {
 
   const logOutFunction = async () => {
     try {
-      await supabase.auth.signOut();
+      await fetch("/api/v1/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout" }),
+      });
+
+      const { error } = await supabase.auth.signOut();
+      
+      // Clear state regardless of signOut success
       setSession(null);
       setUserDetails(null);
       setRoles([]);
       setSelected_vendor(null);
       setSelected_roles([]);
+      setPermissions([]);
       setSelected_vendor_location_id(null);
       storage.clear();
       localStorage.clear();
-      router.push("/login");
+      
+      // Wait a moment then redirect
+      setTimeout(() => {
+        router.push("/login");
+      }, 500);
+      
+      return error; // Return error or null
     } catch (error) {
       console.error("Error signing out:", error);
+      // Still clear state and redirect even if error
+      setSession(null);
+      setUserDetails(null);
+      setRoles([]);
+      setSelected_vendor(null);
+      setSelected_roles([]);
+      setPermissions([]);
+      setSelected_vendor_location_id(null);
+      storage.clear();
+      localStorage.clear();
+      
+      setTimeout(() => {
+        router.push("/login");
+      }, 500);
+      
+      return error;
     }
   };
 
@@ -221,6 +291,7 @@ export default function AuthProvider({ children }: any) {
     selected_vendor,
     selected_vendor_location_id,
     roles,
+    permissions,
     selected_roles,
     updateSelectedRoles: (selectedRoles: number[]) => {
       setSelected_roles(selectedRoles);

@@ -26,6 +26,7 @@ interface SidebarProps {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
+  const normalizedRole = user.role.toLowerCase();
 
   const routes = [
     {
@@ -97,7 +98,7 @@ export function Sidebar({ user }: SidebarProps) {
           <div className="px-3 py-2">
             <div className="space-y-1">
               {routes.map((route) => {
-                if (!route.roles.includes(user.role)) return null;
+                if (!route.roles.includes(normalizedRole)) return null;
 
                 return (
                   <Link

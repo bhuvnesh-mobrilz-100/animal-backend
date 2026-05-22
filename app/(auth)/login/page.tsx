@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,32 +15,58 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (searchParams.get("registered") === "1") {
+      toast({
+        title: "Success",
+        description: "Account created successfully. You can now log in.",
+      });
+    }
+  }, [searchParams, toast]);
+
   async function signInWithEmail() {
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
-    if (error) {
-      setIsLoading(false);
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-        duration: 4000,
+    try {
+      const response = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "login", email, password }),
       });
-      return;
-    }
-    setTimeout(() => {
+
+      const json = await response.json();
+
+      if (!response.ok || json.error || !json.session) {
+        setIsLoading(false);
+        toast({ title: "Error", description: json.error || "Invalid login credentials", variant: "destructive" });
+        return;
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: json.session.access_token,
+        refresh_token: json.session.refresh_token,
+      });
+
+      if (sessionError) {
+        setIsLoading(false);
+        toast({ title: "Error", description: sessionError.message || "Unable to establish session", variant: "destructive" });
+        return;
+      }
+
+      setTimeout(() => {
+        setIsLoading(false);
+        router.replace("/dashboard");
+      }, 200);
+    } catch (err: any) {
       setIsLoading(false);
-      router.replace("/dashboard");
-    }, 200);
+      toast({ title: "Error", description: err?.message || "Login failed", variant: "destructive" });
+    }
   }
 
   return (
@@ -135,6 +162,7 @@ export default function LoginPage() {
               onClick={signInWithEmail}
               disabled={isLoading}
               className="w-full"
+              type="button"
             >
               {!isLoading && <>Log In</>}
               {isLoading && <ClipLoader />}

@@ -1,16 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { ClipLoader } from "react-spinners";
+import { supabase } from "@/lib/supabase";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -21,6 +21,8 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showLoading, setShowLoading] = useState(false);
+  const [roleName, setRoleName] = useState("Subscriber");
+  const [roles, setRoles] = useState<any[]>([]);
   const { toast } = useToast();
 
   const checkPasswordStrength = (password: string) => {
@@ -61,34 +63,83 @@ export default function SignUpPage() {
       setShowLoading(false);
       return;
     }
-    const { data, error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    });
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .insert({
-        email: email,
-        auth_user_id: data.user?.id,
-        device_type: "Web",
+    try {
+      const res = await fetch("/api/v1/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "signup", email, password, roleName }),
       });
 
-    if (userError) {
+      const responseText = await res.text();
+      let json: any = {};
+
+      try {
+        json = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        json = { error: responseText || "Signup failed" };
+      }
+
+      if (!res.ok || json.error) {
+        toast({ title: "Error", description: json.error || "Signup failed", variant: "destructive" });
+        setShowLoading(false);
+        return;
+      }
+
+      if (!json.session?.access_token || !json.session?.refresh_token) {
+        toast({
+          title: "Error",
+          description: "Signup succeeded, but no session was returned. Please log in again.",
+          variant: "destructive",
+        });
+        setShowLoading(false);
+        router.replace("/login");
+        return;
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: json.session.access_token,
+        refresh_token: json.session.refresh_token,
+      });
+
+      if (sessionError) {
+        toast({ title: "Error", description: sessionError.message || "Unable to establish session", variant: "destructive" });
+        setShowLoading(false);
+        return;
+      }
+
       toast({
-        title: "Error",
-        description: userError.message,
-        variant: "destructive",
-        duration: 4000,
+        title: "Success",
+        description: "Account created successfully.",
       });
+
       setShowLoading(false);
-      return;
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 900);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message || "Signup failed", variant: "destructive" });
+      setShowLoading(false);
     }
-
-    setShowLoading(false);
-
-    router.replace("/onboarding");
   }
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/v1/signup-roles');
+        const json = await res.json();
+        if (!res.ok) return;
+        if (mounted) {
+          setRoles(json.roles || []);
+          if (json.roles && json.roles.length > 0) setRoleName(json.roles[0].name);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -140,6 +191,29 @@ export default function SignUpPage() {
                   }}
                   value={email}
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="role">Account Type</Label>
+                <select
+                  id="role"
+                  className="w-full rounded-md border border-input px-3 py-2"
+                  value={roleName}
+                  onChange={(e) => setRoleName(e.target.value)}
+                >
+                  {roles.length === 0 && (
+                    <>
+                      <option value="Guest">Guest (Non-Subscriber)</option>
+                      <option value="Subscriber">Subscriber</option>
+                      <option value="Provider">Provider (Place Owner)</option>
+                    </>
+                  )}
+                  {roles.map((r) => (
+                    <option key={r.role_id} value={r.name}>
+                      {r.name} {r.description ? `- ${r.description}` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -239,6 +313,7 @@ export default function SignUpPage() {
               disabled={showLoading}
               onClick={signUpNewUser}
               className="w-full"
+              type="button"
             >
               {!showLoading && <>Create Account</>}
               {showLoading && <ClipLoader />}

@@ -46,24 +46,14 @@ export function EventsCrud() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   
   // Filter states
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedServiceProvider, setSelectedServiceProvider] = useState<number | undefined>(undefined)
-  const [selectedEventCategory, setSelectedEventCategory] = useState<number | undefined>(undefined)
-  const [showActiveOnly, setShowActiveOnly] = useState(false)
-  const [isSearchParamsLoaded, setIsSearchParamsLoaded] = useState(false)
-
-  // Sync initial filter state from URL after hydration
-  useEffect(() => {
-    setSearchTerm(searchParams.get('search') || '')
-    setSelectedServiceProvider(
-      searchParams.get('service_provider') ? parseInt(searchParams.get('service_provider')!) : undefined
-    )
-    setSelectedEventCategory(
-      searchParams.get('event_category') ? parseInt(searchParams.get('event_category')!) : undefined
-    )
-    setShowActiveOnly(searchParams.get('active_only') === 'true')
-    setIsSearchParamsLoaded(true)
-  }, [searchParams])
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [selectedServiceProvider, setSelectedServiceProvider] = useState<number | undefined>(
+    searchParams.get('service_provider') ? parseInt(searchParams.get('service_provider')!) : undefined
+  )
+  const [selectedEventCategory, setSelectedEventCategory] = useState<number | undefined>(
+    searchParams.get('event_category') ? parseInt(searchParams.get('event_category')!) : undefined
+  )
+  const [showActiveOnly, setShowActiveOnly] = useState(searchParams.get('active_only') === 'true')
 
   // Update URL with search params
   const updateURL = () => {
@@ -79,17 +69,13 @@ export function EventsCrud() {
 
   // Debounced search effect
   useEffect(() => {
-    if (!isSearchParamsLoaded) {
-      return
-    }
-
     const timer = setTimeout(() => {
       updateURL()
       fetchEvents()
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, selectedServiceProvider, selectedEventCategory, showActiveOnly, isSearchParamsLoaded])
+  }, [searchTerm, selectedServiceProvider, selectedEventCategory, showActiveOnly])
 
   const fetchEvents = async () => {
     setLoading(true)

@@ -67,22 +67,12 @@ ON CONFLICT (name) DO NOTHING;
 -- =============================
 -- 5. INSERT DEFAULT ROLES (IF NOT EXISTS)
 -- =============================
-INSERT INTO public.roles (name, description, is_system_role) VALUES
-('Super Admin', 'Full system access', true),
-('Admin', 'Administrative access', true),
-('Manager', 'Management access', true),
-('User', 'Basic user access', true),
-('Viewer', 'Read-only access', true)
-ON CONFLICT (name) DO NOTHING;
+-- Roles are seeded in the primary migration (001). No additional default roles inserted here.
 
 -- =============================
 -- 6. ASSIGN SUPER ADMIN ALL PERMISSIONS
 -- =============================
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM public.roles r, public.permissions p
-WHERE r.name = 'Super Admin'
-ON CONFLICT DO NOTHING;
+-- Super Admin role handled in primary role seeding (if used).
 
 -- =============================
 -- 7. ASSIGN ADMIN PERMISSIONS
@@ -105,20 +95,12 @@ ON CONFLICT DO NOTHING;
 -- =============================
 -- 9. ASSIGN USER PERMISSIONS
 -- =============================
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM public.roles r, public.permissions p
-WHERE r.name = 'User' AND p.action = 'read'
-ON CONFLICT DO NOTHING;
+-- 'User' role not used in this schema; skip.
 
 -- =============================
 -- 10. ASSIGN VIEWER PERMISSIONS
 -- =============================
-INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM public.roles r, public.permissions p
-WHERE r.name = 'Viewer' AND p.action = 'read'
-ON CONFLICT DO NOTHING;
+-- 'Viewer' role not used in this schema; skip.
 
 -- =============================
 -- 11. CREATE INDEXES

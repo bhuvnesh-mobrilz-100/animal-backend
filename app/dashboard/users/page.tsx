@@ -9,17 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/providers/AuthProvider";
 import { UsersIcon, Plus, Search, Edit, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface User {
   user_id: string;
-  name: string;
-  surname: string;
+  user_name: string;
   email: string;
-  profile_image_url: string | null;
+  avatar_url: string;
   is_verified: boolean;
   created_at: string;
   user_roles: UserRole[];
@@ -72,14 +71,11 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select(`
+      const selectWithVerified = `
           user_id,
-          name,
-          surname,
+          user_name,
           email,
-          profile_image_url,
+          avatar_url:profile_image_url,
           is_verified,
           created_at,
           user_roles (
@@ -91,12 +87,42 @@ export default function UsersPage() {
               is_system_role
             )
           )
-        `)
-        .eq("is_deleted", false)
+        `;
+
+      const selectWithoutVerified = `
+          user_id,
+          user_name,
+          email,
+          avatar_url:profile_image_url,
+          created_at,
+          user_roles (
+            role_id,
+            roles (
+              role_id,
+              name,
+              description,
+              is_system_role
+            )
+          )
+        `;
+
+      let res: any = await supabase
+        .from("users")
+        .select(selectWithVerified)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setUsers(data as any[] || []);
+      // If the column doesn't exist on the database, retry without it
+      if (res.error && String(res.error.message).includes('is_verified')) {
+        res = await supabase
+          .from("users")
+          .select(selectWithoutVerified)
+          .order("created_at", { ascending: false });
+      }
+
+      if (res.error) throw res.error;
+      // ensure is_verified exists on each row for UI
+      const rows = (res.data as any[] || []).map((r) => ({ ...r, is_verified: r.is_verified ?? false }));
+      setUsers(rows);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast({
@@ -170,17 +196,10 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    const fullName = `${user.name || ''} ${user.surname || ''}`.trim();
-    return (
-      fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
-  });
-
-  const selectedUserDisplayName = selectedUser
-    ? `${selectedUser.name || ''} ${selectedUser.surname || ''}`.trim() || selectedUser.email
-    : "";
+  const filteredUsers = users.filter(user =>
+    (user.user_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -216,7 +235,7 @@ export default function UsersPage() {
           <Card key={user.user_id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {`${user.name || ''} ${user.surname || ''}`.trim() || user.email}
+                {user.user_name || user.email}
               </CardTitle>
               <Button
                 variant="outline"
@@ -248,14 +267,11 @@ export default function UsersPage() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Manage User Roles</DialogTitle>
-            <DialogDescription>
-              Assign or remove roles for the selected user.
-            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div>
               <Label className="text-base font-medium">
-                Assign roles to {selectedUserDisplayName}
+                Assign roles to {selectedUser?.user_name || selectedUser?.email}
               </Label>
             </div>
             <div className="space-y-2">

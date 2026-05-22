@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.service_providers (
 -- 4. PET FRIENDLY PLACES TABLE
 -- =============================
 CREATE TABLE IF NOT EXISTS public.pet_friendly_places (
-    pet_friendly_place_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    place_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     address TEXT,

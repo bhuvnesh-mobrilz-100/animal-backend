@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Breed, AnimalType } from "./schema"
 import { columns } from "./columns"
@@ -32,6 +32,7 @@ import { toast } from "sonner"
 import { useDebounce } from "@/hooks/use-debounce"
 
 export function BreedsCrud() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   
   // State for data
@@ -47,23 +48,40 @@ export function BreedsCrud() {
   const [selectedBreed, setSelectedBreed] = useState<Breed | null>(null)
   
   // Filter states
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedAnimalType, setSelectedAnimalType] = useState('all')
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
+  const [selectedAnimalType, setSelectedAnimalType] = useState(searchParams.get('animal_type') || 'all')
   
   // Debounced search term
   const debouncedSearchTerm = useDebounce(searchTerm, 500)
   
-  // Sync initial filter state from URL search params on mount
-  useEffect(() => {
-    setSearchTerm(searchParams.get('search') || '')
-    setSelectedAnimalType(searchParams.get('animal_type') || 'all')
-  }, [searchParams])
+  // Update URL when filters change
+  const updateURL = useCallback((params: Record<string, string | number>) => {
+    const newSearchParams = new URLSearchParams(searchParams.toString())
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value && value !== 'all' && value !== '') {
+        newSearchParams.set(key, value.toString())
+      } else {
+        newSearchParams.delete(key)
+      }
+    })
+    
+    router.push(`?${newSearchParams.toString()}`, { scroll: false })
+  }, [router, searchParams])
   
   // Fetch animal types and breeds on mount
   useEffect(() => {
     fetchAnimalTypes()
     fetchBreeds()
   }, [])
+  
+  // Update URL when filters change
+  useEffect(() => {
+    updateURL({
+      search: debouncedSearchTerm,
+      animal_type: selectedAnimalType
+    })
+  }, [debouncedSearchTerm, selectedAnimalType, updateURL])
   
   // Filter breeds when filters change
   useEffect(() => {
@@ -221,7 +239,7 @@ export function BreedsCrud() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Breeds Management</h2>
-        <Button type="button" onClick={handleAddBreed}>
+        <Button onClick={handleAddBreed}>
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Breed
         </Button>
@@ -233,15 +251,9 @@ export function BreedsCrud() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
-              type="search"
               placeholder="Search breeds..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                }
-              }}
               className="pl-10"
             />
           </div>
@@ -262,7 +274,7 @@ export function BreedsCrud() {
         </Select>
         
         {hasFilters && (
-          <Button type="button" variant="outline" onClick={clearFilters}>
+          <Button variant="outline" onClick={clearFilters}>
             <X className="mr-2 h-4 w-4" />
             Clear
           </Button>
