@@ -22,6 +22,7 @@ import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { validatePetFriendlyPlaceName } from "@/lib/name-validation"
+import { PlacesAutocomplete } from "@/components/ui/places-autocomplete"
 import {
   Select,
   SelectContent,
@@ -407,16 +408,18 @@ export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendly
           control={form.control}
           name="address"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Address</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter address" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormDescription>
-                Enter a new address or leave empty to use existing location
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+            <PlacesAutocomplete
+              value={field.value || ""}
+              onChange={(address, lat, lng) => {
+                field.onChange(address)
+                form.setValue("latitude", lat.toString())
+                form.setValue("longitude", lng.toString())
+              }}
+              label="Address"
+              placeholder="Search for an address..."
+              description="Search an address to fetch the location from Google Maps and fill coordinates automatically."
+              error={form.formState.errors.address?.message}
+            />
           )}
         />
 

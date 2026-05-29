@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { PlacesAutocomplete } from "@/components/ui/places-autocomplete";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -215,7 +216,13 @@ export default function RescueCentresPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
-              <Input id="address" value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} required />
+              <PlacesAutocomplete
+                value={form.address}
+                onChange={(address: string) => setForm((prev) => ({ ...prev, address }))}
+                label=""
+                placeholder="Search for an address..."
+                description="Search an address to fetch the formatted location from Google Maps."
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>

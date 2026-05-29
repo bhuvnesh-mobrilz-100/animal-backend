@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { ImageUpload } from "@/components/ui/image-upload"
+import { PlacesAutocomplete } from "@/components/ui/places-autocomplete"
 import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -255,16 +256,18 @@ export function BreederForm({ breeder, onSuccess, onCancel }: BreederFormProps) 
           control={form.control}
           name="address"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Address</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter address" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormDescription>
-                Enter a new address or leave empty to use existing location
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+            <PlacesAutocomplete
+              value={field.value || ""}
+              onChange={(address, lat, lng) => {
+                field.onChange(address)
+                form.setValue("latitude", lat.toString())
+                form.setValue("longitude", lng.toString())
+              }}
+              label="Address"
+              placeholder="Search for an address..."
+              description="Search an address to fetch the location from Google Maps and fill coordinates automatically."
+              error={form.formState.errors.address?.message}
+            />
           )}
         />
 

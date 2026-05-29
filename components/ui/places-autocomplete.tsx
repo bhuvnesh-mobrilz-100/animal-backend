@@ -1,12 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Input } from "@/components/ui/input"
+import { useEffect, useRef, useState } from "react"
+import { Loader2, MapPin } from "lucide-react"
 import { FormControl, FormDescription, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
-import { createPortal } from "react-dom"
-import { MapPin, Loader2 } from "lucide-react"
-import { useDebounce } from "use-debounce"
+import { Input } from "@/components/ui/input"
 
 interface PlacesAutocompleteProps {
   value?: string
@@ -17,13 +14,47 @@ interface PlacesAutocompleteProps {
   error?: string
 }
 
-interface PlacePrediction {
-  place_id: string
-  description: string
-  structured_formatting: {
-    main_text: string
-    secondary_text: string
+declare global {
+  interface Window {
+    google?: any
   }
+}
+
+let googleMapsScriptPromise: Promise<void> | null = null
+
+function loadGoogleMapsScript(apiKey: string) {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Google Maps can only load in the browser"))
+  }
+
+  if (window.google?.maps?.places) {
+    return Promise.resolve()
+  }
+
+  if (googleMapsScriptPromise) {
+    return googleMapsScriptPromise
+  }
+
+  googleMapsScriptPromise = new Promise((resolve, reject) => {
+    const existingScript = document.getElementById("google-maps-places-script")
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true })
+      existingScript.addEventListener("error", () => reject(new Error("Failed to load Google Maps script")), { once: true })
+      return
+    }
+
+    const script = document.createElement("script")
+    script.id = "google-maps-places-script"
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error("Failed to load Google Maps script"))
+    document.head.appendChild(script)
+  })
+
+  return googleMapsScriptPromise
 }
 
 export function PlacesAutocomplete({
@@ -32,219 +63,119 @@ export function PlacesAutocomplete({
   placeholder = "Enter address",
   label,
   description,
-  error
+  error,
 }: PlacesAutocompleteProps) {
   const [inputValue, setInputValue] = useState(value)
-  const [predictions, setPredictions] = useState<PlacePrediction[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
-  const [debouncedInput] = useDebounce(inputValue, 300)
+  const [isReady, setIsReady] = useState(false)
+  const [loadError, setLoadError] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
+  const autocompleteRef = useRef<any>(null)
+  const onChangeRef = useRef(onChange)
+
+  const apiKey = process.env.Google_API || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   useEffect(() => {
     setInputValue(value)
   }, [value])
 
   useEffect(() => {
-    if (debouncedInput && debouncedInput.length > 2) {
-      fetchPredictions(debouncedInput)
-    } else {
-      setPredictions([])
-      setIsOpen(false)
-    }
-  }, [debouncedInput])
+    onChangeRef.current = onChange
+  }, [onChange])
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      updateDropdownPosition()
+    if (!apiKey) {
+      setLoadError("Google Maps API key is not available for the browser.")
+      return
     }
-  }, [isOpen])
 
-  const updateDropdownPosition = () => {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect()
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
-        width: rect.width
-      })
-    }
-  }
+    let cancelled = false
 
-  const fetchPredictions = async (input: string) => {
-    setIsLoading(true)
-    try {
-      const response = await fetch(`/api/places?input=${encodeURIComponent(input)}`)
-      const data = await response.json()
-      
-      if (response.ok && data.predictions) {
-        setPredictions(data.predictions)
-        setIsOpen(data.predictions.length > 0)
-      } else {
-        setPredictions([])
-        setIsOpen(false)
+    const initializeAutocomplete = async () => {
+      setIsLoading(true)
+
+      try {
+        await loadGoogleMapsScript(apiKey)
+
+        if (cancelled || !inputRef.current || !window.google?.maps?.places) {
+          return
+        }
+
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+          fields: ["formatted_address", "geometry", "address_components", "name"],
+        })
+
+        autocompleteRef.current.addListener("place_changed", () => {
+          const place = autocompleteRef.current?.getPlace()
+
+          if (!place?.geometry?.location) {
+            return
+          }
+
+          const formattedAddress = place.formatted_address || place.name || inputRef.current?.value || ""
+          const location = place.geometry.location
+
+          setInputValue(formattedAddress)
+          onChangeRef.current(formattedAddress, location.lat(), location.lng())
+        })
+
+        setIsReady(true)
+        setLoadError("")
+      } catch (error) {
+        console.error("Google Maps autocomplete load error:", error)
+        setLoadError("Unable to load Google Maps suggestions.")
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching predictions:', error)
-      setPredictions([])
-      setIsOpen(false)
-    } finally {
-      setIsLoading(false)
+    }
+
+    initializeAutocomplete()
+
+    return () => {
+      cancelled = true
+    }
+  }, [apiKey])
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value
+    setInputValue(nextValue)
+
+    if (!nextValue) {
+      onChangeRef.current("", 0, 0)
     }
   }
 
-  const handleSelectPlace = async (prediction: PlacePrediction) => {
-    setInputValue(prediction.description)
-    setIsOpen(false)
-    setPredictions([])
-    
-    try {
-      const response = await fetch(`/api/places/details?place_id=${prediction.place_id}`)
-      const data = await response.json()
-      
-      if (response.ok && data.result) {
-        const result = data.result
-        const location = result.geometry.location
-        const formattedAddress = result.formatted_address
-        
-        setInputValue(formattedAddress)
-        onChange(formattedAddress, location.lat, location.lng)
-      }
-    } catch (error) {
-      console.error('Error fetching place details:', error)
-    }
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value
-    setInputValue(newValue)
-    
-    // If user clears the input, reset coordinates
-    if (!newValue) {
-      onChange("", 0, 0)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setIsOpen(false)
-    }
-  }
-
-  const renderDropdown = () => {
-    if (!isOpen || predictions.length === 0) return null
-
-    return createPortal(
-      <div
-        className="fixed bg-white border border-gray-200 rounded-md shadow-lg p-0 z-[9999] max-h-60 overflow-y-auto"
-        style={{
-          top: dropdownPosition.top,
-          left: dropdownPosition.left,
-          width: dropdownPosition.width,
-        }}
-      >
-        <Command>
-          <CommandList>
-            <CommandGroup>
-              {predictions.map((prediction) => (
-                <CommandItem
-                  key={prediction.place_id}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    handleSelectPlace(prediction)
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handleSelectPlace(prediction)
-                  }}
-                  className="cursor-pointer"
-                >
-                  <MapPin className="mr-2 h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="font-medium">
-                      {prediction.structured_formatting.main_text}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {prediction.structured_formatting.secondary_text}
-                    </span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </div>,
-      document.body
-    )
-  }
-
-  if (label) {
-    return (
-      <FormItem>
-        <FormLabel>{label}</FormLabel>
-        <FormControl>
-          <div className="relative">
-            <Input
-              ref={inputRef}
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className="pr-10"
-              onFocus={() => {
-                if (predictions.length > 0) {
-                  setIsOpen(true)
-                }
-              }}
-              onBlur={() => {
-                // Delay closing to allow for clicks on dropdown items
-                setTimeout(() => setIsOpen(false), 150)
-              }}
-            />
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-          </div>
-        </FormControl>
-        {description && <FormDescription>{description}</FormDescription>}
-        {error && <FormMessage>{error}</FormMessage>}
-        {renderDropdown()}
-      </FormItem>
-    )
-  }
-
-  return (
+  const inputField = (
     <div className="relative">
       <Input
         ref={inputRef}
         value={inputValue}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
+        onChange={handleChange}
         placeholder={placeholder}
         className="pr-10"
-        onFocus={() => {
-          if (predictions.length > 0) {
-            setIsOpen(true)
-          }
-        }}
-        onBlur={() => {
-          // Delay closing to allow for clicks on dropdown items
-          setTimeout(() => setIsOpen(false), 150)
-        }}
       />
-      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+      <div className="absolute right-3 top-1/2 -translate-y-1/2">
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : (
           <MapPin className="h-4 w-4 text-muted-foreground" />
         )}
       </div>
-      {renderDropdown()}
+      {loadError && <p className="mt-2 text-sm text-destructive">{loadError}</p>}
+      {isReady && !loadError && <p className="mt-2 text-sm text-muted-foreground">Search for a city, hotel, landmark, or address from Google Maps.</p>}
     </div>
   )
+
+  if (label) {
+    return (
+      <FormItem>
+        <FormLabel>{label}</FormLabel>
+        <FormControl>{inputField}</FormControl>
+        {description && <FormDescription>{description}</FormDescription>}
+        {error && <FormMessage>{error}</FormMessage>}
+      </FormItem>
+    )
+  }
+
+  return inputField
 }

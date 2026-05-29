@@ -11,6 +11,10 @@ export const eventSchema = z.object({
   }),
   end_date: z.string().optional(),
   location_id: z.number().optional(),
+  address: z.string().optional(),
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
+  show_publicly: z.boolean().default(true),
   image_url: z.string().optional(),
   price: z.number().min(0, {
     message: "Price must be 0 or greater.",
@@ -38,6 +42,13 @@ export type Event = z.infer<typeof eventSchema> & {
     icon?: string
     color?: string
   }
+  location?: {
+    location_id: number
+    address: string
+    latitude: string
+    longitude: string
+    show_publicly: boolean
+  } | null
 }
 
 export type ServiceProvider = {

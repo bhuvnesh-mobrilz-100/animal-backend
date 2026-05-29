@@ -41,29 +41,28 @@ export function AddressInputWithGeocoding({
 
     setIsGeocoding(true)
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API
-      
-      if (!apiKey) {
-        toast.error("Google API key not configured")
+      const response = await fetch(`/api/places?input=${encodeURIComponent(inputValue)}`)
+      const data = await response.json()
+
+      if (!response.ok || !data.predictions || data.predictions.length === 0) {
+        toast.error(data.error || "Could not find coordinates for this address")
         return
       }
 
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(inputValue)}&region=za&key=${apiKey}`
-      )
-      
-      const data = await response.json()
-      
-      if (data.status === 'OK' && data.results.length > 0) {
-        const result = data.results[0]
+      const placeId = data.predictions[0].place_id
+      const detailsResponse = await fetch(`/api/places/details?place_id=${placeId}`)
+      const detailsData = await detailsResponse.json()
+
+      if (detailsResponse.ok && detailsData.result) {
+        const result = detailsData.result
         const location = result.geometry.location
         const formattedAddress = result.formatted_address
-        
+
         setInputValue(formattedAddress)
         onChange(formattedAddress, location.lat, location.lng)
         toast.success("Address geocoded successfully")
       } else {
-        toast.error("Could not find coordinates for this address")
+        toast.error(detailsData.error || "Could not find coordinates for this address")
       }
     } catch (error) {
       console.error("Geocoding error:", error)

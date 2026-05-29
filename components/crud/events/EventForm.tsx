@@ -13,6 +13,7 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { ServiceProviderSelector } from "./ServiceProviderSelector"
 import { EventCategorySelector } from "./EventCategorySelector"
 import { AdditionalInfoBuilder } from "./AdditionalInfoBuilder"
+import { PlacesAutocomplete } from "@/components/ui/places-autocomplete"
 import {
   Form,
   FormControl,
@@ -52,6 +53,10 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       event_date: event?.event_date ? format(new Date(event.event_date), "yyyy-MM-dd'T'HH:mm") : "",
       end_date: event?.end_date ? format(new Date(event.end_date), "yyyy-MM-dd'T'HH:mm") : "",
       location_id: event?.location_id || undefined,
+      address: event?.location?.address || "",
+      latitude: event?.location?.latitude || "",
+      longitude: event?.location?.longitude || "",
+      show_publicly: event?.location?.show_publicly ?? true,
       image_url: event?.image_url || "",
       price: event?.price || 0,
       max_attendees: event?.max_attendees || undefined,
@@ -65,9 +70,43 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
   const onSubmit = async (values: any) => {
     setIsLoading(true)
     try {
+      let locationId = values.location_id
+
+      if (values.address) {
+        if (values.location_id) {
+          const { error: locationError } = await supabase
+            .from("locations")
+            .update({
+              address: values.address,
+              latitude: values.latitude,
+              longitude: values.longitude,
+              show_publicly: values.show_publicly,
+            })
+            .eq("location_id", values.location_id)
+
+          if (locationError) throw locationError
+          locationId = values.location_id
+        } else {
+          const { data: locationData, error: locationError } = await supabase
+            .from("locations")
+            .insert({
+              address: values.address,
+              latitude: values.latitude,
+              longitude: values.longitude,
+              show_publicly: values.show_publicly,
+            })
+            .select("location_id")
+            .single()
+
+          if (locationError) throw locationError
+          locationId = locationData.location_id
+        }
+      }
+
       const submitData = {
         ...values,
         additional_info: additionalInfo,
+        location_id: locationId,
         // Convert date strings to ISO format
         event_date: values.event_date ? new Date(values.event_date).toISOString() : null,
         end_date: values.end_date ? new Date(values.end_date).toISOString() : null,
@@ -133,6 +172,79 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
                   />
                 </FormControl>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h3 className="text-lg font-medium">Location</h3>
+            <p className="text-sm text-muted-foreground">
+              Search an address to fetch coordinates from Google Maps.
+            </p>
+          </div>
+
+          <FormField
+            control={form.control}
+            name="address"
+            render={({ field }) => (
+              <PlacesAutocomplete
+                value={field.value || ""}
+                onChange={(address, lat, lng) => {
+                  field.onChange(address)
+                  form.setValue("latitude", lat.toString())
+                  form.setValue("longitude", lng.toString())
+                }}
+                label="Address"
+                placeholder="Search for an event address..."
+                description="Select an address to auto-fill latitude and longitude."
+                error={form.formState.errors.address?.message as string | undefined}
+              />
+            )}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="latitude"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Latitude</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Latitude" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="longitude"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Longitude</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Longitude" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="show_publicly"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Show Location Publicly</FormLabel>
+                  <FormDescription>Whether attendees can see the exact location</FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
               </FormItem>
             )}
           />
