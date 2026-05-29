@@ -73,13 +73,56 @@ const data = {
       url: "/dashboard",
       icon: LayoutDashboardIcon,
       permissions: ["dashboard.view"],
-      roles: ["Owner", "Admin", "Manager", "Approver", "Provider", "Subscriber"],
+      roles: [
+        "Owner",
+        "Admin",
+        "Manager",
+        "Approver",
+        "Provider",
+        "Subscriber",
+      ],
+    },
+    {
+      title: "Animal Types",
+      url: "/dashboard/animal-types",
+      icon: DatabaseIcon,
+      roles: ["Owner", "Admin", "Manager"],
     },
     {
       title: "Breeds",
       url: "/dashboard/breeds",
       icon: DatabaseIcon,
       roles: ["Owner", "Admin", "Manager"],
+    },
+    {
+      title: "Breeders",
+      url: "/dashboard/breeders",
+      icon: UsersIcon,
+      roles: ["Owner", "Admin", "Manager"],
+    },
+    {
+      title: "Donations",
+      url: "/dashboard/donations",
+      icon: Coins,
+      roles: ["Owner", "Admin", "Manager"]
+    },
+    {
+      title: "Rescue Centres",
+      url: "/dashboard/rescue-centres",
+      icon: Building2,
+      roles: ["Owner", "Admin", "Manager"]
+    },
+    {
+      title: "Community",
+      url: "/dashboard/community",
+      icon: GroupIcon,
+      roles: ["Owner", "Admin", "Manager", "Subscriber"]
+    },
+    {
+      title: "Veterinarians",
+      url: "/dashboard/veterinarians",
+      icon: Stethoscope,
+      roles: ["Owner", "Admin", "Manager", "Provider"],
     },
     {
       title: "Service Categories",
@@ -96,10 +139,11 @@ const data = {
       items: [],
     },
     {
-      title: "Animal Types",
-      url: "/dashboard/animal-types",
-      icon: DatabaseIcon,
-      roles: ["Owner", "Admin", "Manager"],
+      title: "Pet Friendly Places",
+      url: "/dashboard/pet-friendly-places",
+      icon: Building2,
+      permissions: ["pet_friendly_places.view"],
+      roles: ["Owner", "Admin", "Manager", "Provider"],
     },
     {
       title: "Event Categories",
@@ -112,7 +156,14 @@ const data = {
       url: "/dashboard/events",
       icon: Calendar,
       permissions: ["events.view"],
-      roles: ["Owner", "Admin", "Manager", "Approver", "Subscriber", "Provider"],
+      roles: [
+        "Owner",
+        "Admin",
+        "Manager",
+        "Approver",
+        "Subscriber",
+        "Provider",
+      ],
     },
     {
       title: "Users",
@@ -127,23 +178,10 @@ const data = {
       roles: ["Owner", "Admin"],
     },
     {
-      title: "Member Management",
-      url: "/dashboard/member-management",
-      icon: GroupIcon,
-      roles: ["Owner", "Admin", "Manager"],
-    },
-    {
       title: "Payments & Billing",
       url: "/dashboard/payments-billing",
       icon: CreditCardIcon,
       roles: ["Owner", "Admin"],
-    },
-    {
-      title: "Pet Friendly Places",
-      url: "/dashboard/pet-friendly-places",
-      icon: Building2,
-      permissions: ["pet_friendly_places.view"],
-      roles: ["Owner", "Admin", "Manager", "Provider"],
     },
     {
       title: "Reports",
@@ -177,109 +215,6 @@ const data = {
       permissions: ["analytics.view"],
       roles: ["Owner", "Admin", "Manager", "Approver", "Provider"],
     },
-    {
-      title: "Veterinarians",
-      url: "/dashboard/veterinarians",
-      icon: Stethoscope,
-      roles: ["Owner", "Admin", "Manager", "Provider"],
-    },
-  ],
-  navClouds: [
-    {
-      title: "Capture",
-      icon: CameraIcon,
-      isActive: true,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: FileTextIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: FileCodeIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Transactions",
-      url: "/dashboard/transactions",
-      icon: CreditCard,
-    },
-    {
-      title: "Boosted Items",
-      url: "/dashboard/boosted",
-      icon: Zap,
-    },
-    {
-      title: "Boost Packages",
-      url: "/dashboard/boost-packages",
-      icon: Package,
-    },
-    {
-      title: "View Analytics",
-      url: "/dashboard/analytics",
-      icon: BarChartIcon,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: HelpCircleIcon,
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: SearchIcon,
-    },
-  ],
-  documents: [
-    {
-      name: "Data Library",
-      url: "#",
-      icon: DatabaseIcon,
-    },
-    {
-      name: "Reports",
-      url: "#",
-      icon: ClipboardListIcon,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: FileIcon,
-    },
   ],
 };
 
@@ -296,15 +231,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   } = useAuth();
 
   const userRoleNames = roles.map((role) => role.name).filter(Boolean);
-  const normalizedUserRoleNames = userRoleNames.map((roleName) => roleName.toLowerCase());
-  const normalizedUserPermissions = permissions.map((permission) => permission.toLowerCase());
-  const hasRole = (roleName: string) => normalizedUserRoleNames.includes(roleName.toLowerCase());
+  const normalizedUserRoleNames = userRoleNames.map((roleName) =>
+    roleName.toLowerCase(),
+  );
+  const normalizedUserPermissions = permissions.map((permission) =>
+    permission.toLowerCase(),
+  );
+  const hasRole = (roleName: string) =>
+    normalizedUserRoleNames.includes(roleName.toLowerCase());
   const hasPermission = (permissionName: string) =>
     normalizedUserPermissions.includes(permissionName.toLowerCase());
   const isOwner = hasRole("Owner");
   const canAccessNavItem = (item: any) => {
     const matchesPermission = Array.isArray(item.permissions)
-      ? item.permissions.some((permissionName: string) => hasPermission(permissionName))
+      ? item.permissions.some((permissionName: string) =>
+          hasPermission(permissionName),
+        )
       : false;
     const matchesRole = Array.isArray(item.roles)
       ? item.roles.some((roleName: string) => hasRole(roleName))
@@ -321,11 +263,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
 
     if (title === "Boosted Items" || title === "Boost Packages") {
-      return hasRole("Admin") || hasRole("Provider") || hasPermission("boosters.view");
+      return (
+        hasRole("Admin") ||
+        hasRole("Provider") ||
+        hasPermission("boosters.view")
+      );
     }
 
     if (title === "View Analytics") {
-      return hasRole("Admin") || hasRole("Manager") || hasRole("Approver") || hasRole("Provider") || hasPermission("analytics.view");
+      return (
+        hasRole("Admin") ||
+        hasRole("Manager") ||
+        hasRole("Approver") ||
+        hasRole("Provider") ||
+        hasPermission("analytics.view")
+      );
     }
 
     return true;
@@ -355,13 +307,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 (item) =>
                   isOwner ||
                   !item.roles ||
-                  item.roles.some((roleName: string) => hasRole(roleName))
+                  item.roles.some((roleName: string) => hasRole(roleName)),
               );
-        setMainNavData(filteredNavMain.length > 0 ? filteredNavMain : data.navMain.filter((item) => item.title === "Dashboard"));
-        
-        // Filter secondary items based on user roles
-        const filteredSecondary = getFilteredSecondaryItems(filteredNavMain.length > 0 ? filteredNavMain : data.navMain.filter((item) => item.title === "Dashboard"));
-        setSecondaryNavData(filteredSecondary);
+        setMainNavData(
+          filteredNavMain.length > 0
+            ? filteredNavMain
+            : data.navMain.filter((item) => item.title === "Dashboard"),
+        );
+
         return;
       }
 
@@ -387,11 +340,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       const filteredNavMain =
         roles.length === 0
           ? updatedNavMain.filter((item) => item.title === "Dashboard")
-          : updatedNavMain.filter(
-              (item) =>
-                isOwner ||
-                canAccessNavItem(item)
-            );
+          : updatedNavMain.filter((item) => isOwner || canAccessNavItem(item));
 
       const fallbackNavMain =
         filteredNavMain.length > 0
@@ -399,53 +348,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           : updatedNavMain.filter((item) => item.title === "Dashboard");
 
       setMainNavData(fallbackNavMain);
-      
-      // Filter secondary items to remove duplicates and apply role-based filtering
-      const filteredSecondary = getFilteredSecondaryItems(fallbackNavMain);
-      setSecondaryNavData(filteredSecondary);
-      
     } catch (error) {
       console.error("Error setting up navigation:", error);
       const filteredNavMain =
         roles.length === 0
           ? data.navMain.filter((item) => item.title === "Dashboard")
-          : data.navMain.filter(
-              (item) =>
-                isOwner ||
-                canAccessNavItem(item)
-            );
+          : data.navMain.filter((item) => isOwner || canAccessNavItem(item));
       const fallbackNavMain =
         filteredNavMain.length > 0
           ? filteredNavMain
           : data.navMain.filter((item) => item.title === "Dashboard");
 
       setMainNavData(fallbackNavMain);
-      
-      const filteredSecondary = getFilteredSecondaryItems(fallbackNavMain);
-      setSecondaryNavData(filteredSecondary);
     }
-  };
-  
-  // Helper function to filter secondary navigation items
-  const getFilteredSecondaryItems = (mainNav: any[]) => {
-    // Create a set of URLs and titles from main navigation for quick lookup
-    const mainNavUrls = new Set(mainNav.map(item => item.url));
-    const mainNavTitles = new Set(mainNav.map(item => item.title));
-    
-    // Filter secondary items
-    return data.navSecondary.filter(secondaryItem => {
-      const hasAccess = canAccessSecondaryItem(secondaryItem.title);
-      
-      // Remove duplicate items that already exist in main navigation
-      const isDuplicate = mainNavUrls.has(secondaryItem.url) || 
-                         mainNavTitles.has(secondaryItem.title) ||
-                         secondaryItem.title === "Transactions" && mainNavTitles.has("Transactions") ||
-                         secondaryItem.title === "Boosted Items" && mainNavTitles.has("Boosted") ||
-                         secondaryItem.title === "Boost Packages" && mainNavTitles.has("Boost Packages") ||
-                         secondaryItem.title === "View Analytics" && mainNavTitles.has("Analytics");
-      
-      return !isDuplicate && hasAccess;
-    });
   };
 
   return (
@@ -457,7 +372,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <Link href="/dashboard" className="flex items-center gap-2 p-4 border-b">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 p-4 border-b"
+              >
                 {!selected_vendor && !loading && (
                   <>
                     <Image
@@ -486,12 +404,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      
+
       <SidebarContent>
         <NavMain items={mainNavData} />
         <NavSecondary items={secondaryNavData} className="mt-auto" />
       </SidebarContent>
-      
+
       <SidebarFooter>
         <NavUser />
       </SidebarFooter>

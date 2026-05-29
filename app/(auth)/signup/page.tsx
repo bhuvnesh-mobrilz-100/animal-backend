@@ -145,16 +145,17 @@ export default function SignUpPage() {
     <div className="min-h-screen bg-slate-50 flex">
       <Toaster />
 
-      <div className="flex-1 hidden lg:block">
-        <div className="h-full w-full relative">
+     <div className="flex-1 hidden lg:block">
+        <div className="h-full w-full relative flex justify-center">
           <img
             src="/images/Logo1024.png"
             alt="Secure payments"
-            className="h-full w-full object-scale-down"
+            className="h-full w-1/2 object-scale-down"
           />
-          <div className="absolute inset-0" />
+          <div className="absolute inset-0 " />
         </div>
       </div>
+      
 
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
@@ -319,7 +320,7 @@ export default function SignUpPage() {
               {showLoading && <ClipLoader />}
             </Button>
 
-            <div className="relative">
+            {/* <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t" />
               </div>
@@ -328,9 +329,9 @@ export default function SignUpPage() {
                   Or continue with
                 </span>
               </div>
-            </div>
+            </div> */}
 
-            <div className="grid grid-cols-3 gap-3">
+            {/* <div className="grid grid-cols-3 gap-3">
               <Button variant="outline" className="w-full">
                 <svg className="h-5 w-5" viewBox="0 0 24 24">
                   <path
@@ -369,7 +370,7 @@ export default function SignUpPage() {
                   <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
                 </svg>
               </Button>
-            </div>
+            </div> */}
 
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
