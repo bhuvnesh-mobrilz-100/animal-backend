@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Toaster } from "@/components/ui/toaster";
 import { ClipLoader } from "react-spinners";
 import { supabase } from "@/lib/supabase";
 
@@ -143,8 +142,6 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Toaster />
-
      <div className="flex-1 hidden lg:block">
         <div className="h-full w-full relative flex justify-center">
           <img

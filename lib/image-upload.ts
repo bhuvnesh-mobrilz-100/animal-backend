@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface UploadResult {
   url: string;
@@ -7,17 +6,6 @@ export interface UploadResult {
 }
 
 export class ImageUploadService {
-  private static readonly BUCKET_NAME = 'animalclickposts';
-
-  /**
-   * Generate a unique filename for the uploaded file
-   */
-  private static generateUniqueFileName(file: File): string {
-    const extension = file.name.split('.').pop();
-    const uniqueName = `${uuidv4()}.${extension}`;
-    return uniqueName;
-  }
-
   /**
    * Upload a single image file to Supabase storage
    */
@@ -34,27 +22,26 @@ export class ImageUploadService {
         throw new Error('File size must be less than 5MB');
       }
 
-      const fileName = this.generateUniqueFileName(file);
-      const filePath = folder ? `${folder}/${fileName}` : fileName;
-
-      const { error } = await supabase.storage
-        .from(this.BUCKET_NAME)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        throw new Error(`Upload failed: ${error.message}`);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (folder) {
+        formData.append('folder', folder);
       }
 
-      const { data } = supabase.storage
-        .from(this.BUCKET_NAME)
-        .getPublicUrl(filePath);
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Upload failed');
+      }
 
       return {
-        url: data.publicUrl,
-        path: filePath
+        url: payload.url,
+        path: payload.path,
       };
     } catch (error) {
       console.error('Image upload error:', error);
@@ -68,7 +55,7 @@ export class ImageUploadService {
   static async deleteImage(filePath: string): Promise<void> {
     try {
       const { error } = await supabase.storage
-        .from(this.BUCKET_NAME)
+        .from('animalclickposts')
         .remove([filePath]);
 
       if (error) {
@@ -87,7 +74,7 @@ export class ImageUploadService {
     try {
       const urlObj = new URL(url);
       const pathParts = urlObj.pathname.split('/');
-      const bucketIndex = pathParts.findIndex(part => part === this.BUCKET_NAME);
+      const bucketIndex = pathParts.findIndex(part => part === 'animalclickposts');
       
       if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
         return pathParts.slice(bucketIndex + 1).join('/');

@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ClipLoader } from "react-spinners";
-import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
@@ -59,10 +58,15 @@ export default function LoginPage() {
         return;
       }
 
+      toast({
+        title: "Success",
+        description: "Logged in successfully.",
+      });
+
       setTimeout(() => {
         setIsLoading(false);
         router.replace("/dashboard");
-      }, 200);
+      }, 800);
     } catch (err: any) {
       setIsLoading(false);
       toast({ title: "Error", description: err?.message || "Login failed", variant: "destructive" });
@@ -71,7 +75,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Toaster />
       <div className="flex-1 hidden lg:block">
         <div className="h-full w-full relative flex justify-center">
           <img

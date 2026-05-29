@@ -31,11 +31,39 @@ type AuthenticatedUser = {
 export async function getTokenFromRequest(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.replace('Bearer ', '').trim();
+    const bearerToken = authHeader.replace('Bearer ', '').trim();
+    if (bearerToken) return bearerToken;
   }
 
-  const cookieToken = request.cookies.get('sb-access-token')?.value;
-  if (cookieToken) return cookieToken;
+  const cookieCandidates = [
+    request.cookies.get('sb-access-token')?.value,
+    request.cookies.get('sb-auth-token')?.value,
+    ...request.cookies
+      .getAll()
+      .filter((cookie) => cookie.name.startsWith('sb-') && cookie.name.includes('auth-token'))
+      .map((cookie) => cookie.value),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of cookieCandidates) {
+    const trimmedCandidate = candidate.trim();
+    if (!trimmedCandidate) continue;
+
+    if (trimmedCandidate.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmedCandidate);
+        const sessionToken = parsed?.access_token || parsed?.session?.access_token;
+        if (typeof sessionToken === 'string' && sessionToken.trim()) {
+          return sessionToken.trim();
+        }
+      } catch {
+        // Ignore non-JSON cookie payloads.
+      }
+    }
+
+    if (trimmedCandidate.split('.').length === 3) {
+      return trimmedCandidate;
+    }
+  }
 
   return null;
 }
@@ -53,7 +81,10 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
   } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !user) {
-    console.error('Server auth failed:', error?.message || 'No user');
+    const errorMessage = error?.message || 'No user';
+    if (errorMessage !== 'Auth session missing!') {
+      console.error('Server auth failed:', errorMessage);
+    }
     return null;
   }
 
