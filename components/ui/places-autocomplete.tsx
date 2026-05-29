@@ -73,7 +73,7 @@ export function PlacesAutocomplete({
   const autocompleteRef = useRef<any>(null)
   const onChangeRef = useRef(onChange)
 
-  const apiKey = process.env.Google_API || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const apiKey = process.env.Google_API 
 
   useEffect(() => {
     setInputValue(value)
