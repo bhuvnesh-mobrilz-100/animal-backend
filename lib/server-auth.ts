@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from './server-supabase';
+import { hashAccessToken } from './auth-session';
 
 type SupabaseUser = {
   id: string;
@@ -26,6 +27,7 @@ type AuthenticatedUser = {
   internalUserId: string | null;
   roleIds: number[];
   roleNames: string[];
+  accessToken?: string;
 };
 
 export async function getTokenFromRequest(request: NextRequest): Promise<string | null> {
@@ -90,15 +92,30 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
 
   const internalQuery = await supabaseAdmin
     .from('users')
-    .select('user_id')
+    .select('user_id, current_access_token_hash')
     .eq('auth_user_id', user.id)
     .maybeSingle();
 
-  if (internalQuery.error) {
-    console.error('Unable to resolve internal user record:', internalQuery.error.message);
+  let resolvedInternalQuery = internalQuery;
+
+  if (internalQuery.error && (internalQuery.error.code === 'PGRST204' || internalQuery.error.message?.includes('current_access_token_hash'))) {
+    resolvedInternalQuery = await supabaseAdmin
+      .from('users')
+      .select('user_id')
+      .eq('auth_user_id', user.id)
+      .maybeSingle();
   }
 
-  const internalUserId = internalQuery.data?.user_id ?? null;
+  if (resolvedInternalQuery.error) {
+    console.error('Unable to resolve internal user record:', resolvedInternalQuery.error.message);
+  }
+
+  const internalUserId = resolvedInternalQuery.data?.user_id ?? null;
+  const storedTokenHash = resolvedInternalQuery.data?.current_access_token_hash ?? null;
+
+  if (storedTokenHash && storedTokenHash !== hashAccessToken(token)) {
+    return null;
+  }
 
   const rolesQuery = internalUserId
     ? await supabaseAdmin
@@ -136,6 +153,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
     internalUserId,
     roleIds,
     roleNames,
+    accessToken: token,
   };
 }
 

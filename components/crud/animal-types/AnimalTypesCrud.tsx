@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
 import { AnimalType } from "./schema"
 import { columns } from "./columns"
 import { DataTable } from "../DataTable"
@@ -43,13 +42,11 @@ export function AnimalTypesCrud() {
   const fetchAnimalTypes = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from("animal_types")
-        .select("*")
-        .order("name")
+      const response = await fetch("/api/v1/animal-types")
+      const result = await response.json()
 
-      if (error) throw error
-      setAnimalTypes(data || [])
+      if (!response.ok) throw new Error(result.error || "Failed to load animal types")
+      setAnimalTypes(result.data || [])
     } catch (error) {
       console.error("Error fetching animal types:", error)
       toast.error("Failed to load animal types")
@@ -76,48 +73,19 @@ export function AnimalTypesCrud() {
     if (!selectedAnimalType) return
 
     try {
-      // Check if the animal type is used in breeds
-      const { data: breedData, error: breedError } = await supabase
-        .from("breeds")
-        .select("breed_id")
-        .eq("animal_type_id", selectedAnimalType.animal_type_id)
-        .limit(1)
+      const response = await fetch(`/api/v1/animal-types/${selectedAnimalType.animal_type_id}`, {
+        method: "DELETE",
+      })
 
-      if (breedError) throw breedError
-
-      if (breedData && breedData.length > 0) {
-        toast.error("Cannot delete animal type that is used in breeds")
-        return
-      }
-
-      // Check if the animal type is used in pet friendly places
-      const { data: placeData, error: placeError } = await supabase
-        .from("pet_friendly_place_animals")
-        .select("pet_friendly_place_animal_id")
-        .eq("animal_type_id", selectedAnimalType.animal_type_id)
-        .limit(1)
-
-      if (placeError) throw placeError
-
-      if (placeData && placeData.length > 0) {
-        toast.error("Cannot delete animal type that is used in pet friendly places")
-        return
-      }
-
-      // If not used anywhere, proceed with deletion
-      const { error } = await supabase
-        .from("animal_types")
-        .delete()
-        .eq("animal_type_id", selectedAnimalType.animal_type_id)
-
-      if (error) throw error
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to delete animal type")
       
       // Update the local state to remove the deleted animal type
-      setAnimalTypes(animalTypes.filter(at => at.animal_type_id !== selectedAnimalType.animal_type_id))
+      setAnimalTypes((current) => current.filter(at => at.animal_type_id !== selectedAnimalType.animal_type_id))
       toast.success("Animal type deleted successfully")
     } catch (error) {
       console.error("Error deleting animal type:", error)
-      toast.error("Failed to delete animal type")
+      toast.error(error instanceof Error ? error.message : "Failed to delete animal type")
     } finally {
       setIsDeleteDialogOpen(false)
       setSelectedAnimalType(null)

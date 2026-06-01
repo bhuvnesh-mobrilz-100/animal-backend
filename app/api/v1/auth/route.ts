@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/server-supabase';
+import { getTokenFromRequest } from '@/lib/server-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -6,8 +8,20 @@ export async function POST(request: NextRequest) {
     const { action } = body as any;
 
     if (action === 'logout') {
-      // No server-side work required for logout in this app; client will call
-      // Supabase signOut. This endpoint prevents 404s and allows future hooks.
+      const token = await getTokenFromRequest(request);
+
+      if (token) {
+        const { data } = await supabaseAdmin.auth.getUser(token);
+        const authUserId = data.user?.id;
+
+        if (authUserId) {
+          await supabaseAdmin
+            .from('users')
+            .update({ current_access_token_hash: null })
+            .eq('auth_user_id', authUserId);
+        }
+      }
+
       return NextResponse.json({ success: true });
     }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { AnimalType, animalTypeSchema } from "./schema"
@@ -38,6 +38,20 @@ export function AnimalTypeForm({ animalType, onSuccess, onCancel }: AnimalTypeFo
     },
   })
 
+  useEffect(() => {
+    form.reset(
+      animalType
+        ? {
+            name: animalType.name,
+            image_url: animalType.image_url || "",
+          }
+        : {
+            name: "",
+            image_url: "",
+          }
+    )
+  }, [animalType, form])
+
   async function onSubmit(data: AnimalType) {
     setIsLoading(true)
     try {
@@ -67,7 +81,7 @@ export function AnimalTypeForm({ animalType, onSuccess, onCancel }: AnimalTypeFo
 
       if (isEditing) {
         // Update existing animal type
-        const response = await fetch(`/api/animal_types/${animalType.animal_type_id}?primaryKey=animal_type_id`, {
+        const response = await fetch(`/api/v1/animal-types/${animalType.animal_type_id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -80,7 +94,7 @@ export function AnimalTypeForm({ animalType, onSuccess, onCancel }: AnimalTypeFo
         toast.success("Animal type updated successfully")
       } else {
         // Create new animal type
-        const response = await fetch("/api/animal_types", {
+        const response = await fetch("/api/v1/animal-types", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

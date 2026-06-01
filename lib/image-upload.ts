@@ -28,7 +28,7 @@ export class ImageUploadService {
         formData.append('folder', folder);
       }
 
-      const response = await fetch('/api/upload-image', {
+      const response = await fetch('/api/v1/upload-image', {
         method: 'POST',
         body: formData,
       });

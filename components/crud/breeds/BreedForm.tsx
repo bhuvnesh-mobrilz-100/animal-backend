@@ -25,7 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { validateBreedName } from "@/lib/name-validation"
 
@@ -52,17 +51,37 @@ export function BreedForm({ breed, onSuccess, onCancel }: BreedFormProps) {
   })
 
   useEffect(() => {
+    form.reset(
+      breed
+        ? {
+            name: breed.name,
+            description: breed.description || "",
+            image_url: breed.image_url || "",
+            animal_type_id: breed.animal_type_id,
+            breed_id: breed.breed_id,
+            created_at: breed.created_at,
+            animal_type: breed.animal_type || null,
+          }
+        : {
+            name: "",
+            description: "",
+            image_url: "",
+            animal_type_id: undefined,
+          }
+    )
+  }, [breed, form])
+
+  useEffect(() => {
     fetchAnimalTypes()
   }, [])
 
   const fetchAnimalTypes = async () => {
     try {
-      const { data, error } = await supabase
-        .from("animal_types")
-        .select("*")
-        .order("name")
+      const response = await fetch("/api/v1/animal-types")
+      const result = await response.json()
 
-      if (error) throw error
+      if (!response.ok) throw new Error(result.error || "Failed to load animal types")
+      const data = result.data || []
       setAnimalTypes(data || [])
     } catch (error) {
       console.error("Error fetching animal types:", error)
@@ -92,32 +111,38 @@ export function BreedForm({ breed, onSuccess, onCancel }: BreedFormProps) {
         return;
       }
 
+      const payload = {
+        name: data.name,
+        description: data.description || null,
+        image_url: data.image_url?.trim() || null,
+        animal_type_id: data.animal_type_id,
+      }
+
       if (isEditing) {
         // Update existing breed
-        const { error } = await supabase
-          .from("breeds")
-          .update({
-            name: data.name,
-            description: data.description,
-            image_url: data.image_url,
-            animal_type_id: data.animal_type_id,
-          })
-          .eq("breed_id", breed.breed_id)
+        const response = await fetch(`/api/v1/breeds/${breed.breed_id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
 
-        if (error) throw error
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || "Failed to update breed")
         toast.success("Breed updated successfully")
       } else {
         // Create new breed
-        const { error } = await supabase
-          .from("breeds")
-          .insert({
-            name: data.name,
-            description: data.description,
-            image_url: data.image_url,
-            animal_type_id: data.animal_type_id,
-          })
+        const response = await fetch("/api/v1/breeds", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        })
 
-        if (error) throw error
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || "Failed to create breed")
         toast.success("Breed created successfully")
       }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/server-supabase';
 import { buildAuthProfile } from '@/lib/auth-profile';
+import { setCurrentAccessTokenHash } from '@/lib/auth-session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +31,10 @@ async function handleLogin(email: string, password: string) {
 
     if (error) {
       return NextResponse.json({ error: error.message || 'Invalid credentials' }, { status: 401 });
+    }
+
+    if (data?.user && data.session?.access_token) {
+      await setCurrentAccessTokenHash(data.user.id, data.session.access_token);
     }
 
     const authProfile = data?.user

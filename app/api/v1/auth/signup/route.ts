@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/server-supabase';
 import { buildAuthProfile, PUBLIC_SIGNUP_ROLE_NAMES } from '@/lib/auth-profile';
+import { setCurrentAccessTokenHash } from '@/lib/auth-session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,6 +113,10 @@ async function handleSignup(email: string, password: string, roleName: string = 
       email,
       roleNames: [roleName],
     });
+
+    if (session?.access_token) {
+      await setCurrentAccessTokenHash(userId, session.access_token);
+    }
 
     return NextResponse.json(
       { user: (data as any).user ?? null, session, ...authProfile },

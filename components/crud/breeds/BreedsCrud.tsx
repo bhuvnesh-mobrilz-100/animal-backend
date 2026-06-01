@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import { Breed, AnimalType } from "./schema"
 import { columns } from "./columns"
 import { DataTable } from "../DataTable"
@@ -90,12 +89,11 @@ export function BreedsCrud() {
   
   const fetchAnimalTypes = async () => {
     try {
-      const { data, error } = await supabase
-        .from("animal_types")
-        .select("*")
-        .order("name")
-      
-      if (error) throw error
+      const response = await fetch("/api/v1/animal-types")
+      const result = await response.json()
+
+      if (!response.ok) throw new Error(result.error || "Failed to load animal types")
+      const data = result.data || []
       setAnimalTypes(data || [])
     } catch (error) {
       console.error("Error fetching animal types:", error)
@@ -106,15 +104,15 @@ export function BreedsCrud() {
   const fetchBreeds = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from("breeds")
-        .select(`
-          *,
-          animal_type:animal_types(*)
-        `)
-        .order("name")
+      const params = new URLSearchParams()
+      if (searchTerm) params.set('search', searchTerm)
+      if (selectedAnimalType && selectedAnimalType !== 'all') params.set('animal_type', selectedAnimalType)
 
-      if (error) throw error
+      const response = await fetch(`/api/v1/breeds${params.toString() ? `?${params.toString()}` : ''}`)
+      const result = await response.json()
+
+      if (!response.ok) throw new Error(result.error || "Failed to load breeds")
+      const data = result.data || []
       setAllBreeds(data || [])
     } catch (error) {
       console.error("Error fetching breeds:", error)
@@ -164,20 +162,20 @@ export function BreedsCrud() {
     if (!selectedBreed) return
 
     try {
-      const { error } = await supabase
-        .from("breeds")
-        .delete()
-        .eq("breed_id", selectedBreed.breed_id)
+      const response = await fetch(`/api/v1/breeds/${selectedBreed.breed_id}`, {
+        method: "DELETE",
+      })
 
-      if (error) throw error
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Failed to delete breed")
       
       // Update both the filtered and all breeds state
-      setAllBreeds(allBreeds.filter(b => b.breed_id !== selectedBreed.breed_id))
-      setBreeds(breeds.filter(b => b.breed_id !== selectedBreed.breed_id))
+      setAllBreeds((current) => current.filter(b => b.breed_id !== selectedBreed.breed_id))
+      setBreeds((current) => current.filter(b => b.breed_id !== selectedBreed.breed_id))
       toast.success("Breed deleted successfully")
     } catch (error) {
       console.error("Error deleting breed:", error)
-      toast.error("Failed to delete breed")
+      toast.error(error instanceof Error ? error.message : "Failed to delete breed")
     } finally {
       setIsDeleteDialogOpen(false)
       setSelectedBreed(null)

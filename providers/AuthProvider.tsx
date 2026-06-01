@@ -106,6 +106,35 @@ export default function AuthProvider({ children }: any) {
     []
   );
 
+  const refreshSessionFromServer = async (currentSession: Session | null) => {
+    if (!currentSession?.refresh_token) {
+      return null;
+    }
+
+    const response = await fetch("/api/v1/auth/refresh-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: currentSession.refresh_token }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload?.session?.access_token || !payload?.session?.refresh_token) {
+      return null;
+    }
+
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: payload.session.access_token,
+      refresh_token: payload.session.refresh_token,
+    });
+
+    if (sessionError) {
+      return null;
+    }
+
+    return payload.session as Session;
+  };
+
   useEffect(() => {
     const isProtectedRoute = protectedRoutes.some(route => path.startsWith(route));
     if (isProtectedRoute && !loading && !session) {
@@ -127,6 +156,15 @@ export default function AuthProvider({ children }: any) {
         });
 
         const payload = await response.json();
+
+        if (response.status === 401 && newSession?.refresh_token) {
+          const refreshedSession = await refreshSessionFromServer(newSession);
+
+          if (refreshedSession) {
+            await fetchSession(refreshedSession);
+            return;
+          }
+        }
 
         if (response.ok && payload.profile) {
           const profile = payload.profile;
