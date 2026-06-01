@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Input parameter is required' }, { status: 400 })
   }
 
-  const apiKey = process.env.Google_API
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API
   
   if (!apiKey) {
     return NextResponse.json({ error: 'Google API key not configured' }, { status: 500 })

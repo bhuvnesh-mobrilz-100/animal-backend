@@ -101,15 +101,15 @@ const data = {
       roles: ["Owner", "Admin", "Manager"],
     },
     {
-      title: "Donations",
-      url: "/dashboard/donations",
-      icon: Coins,
-      roles: ["Owner", "Admin", "Manager"]
-    },
-    {
       title: "Rescue Centres",
       url: "/dashboard/rescue-centres",
       icon: Building2,
+      roles: ["Owner", "Admin", "Manager"]
+    },
+    {
+      title: "Donations",
+      url: "/dashboard/donations",
+      icon: Coins,
       roles: ["Owner", "Admin", "Manager"]
     },
     {

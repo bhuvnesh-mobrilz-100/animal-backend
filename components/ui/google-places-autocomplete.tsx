@@ -36,10 +36,10 @@ export function GooglePlacesAutocomplete({
   useEffect(() => {
     const initializeAutocomplete = async () => {
       try {
-        const apiKey = process.env.Google_API
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API
 
         if (!apiKey) {
-          console.error("Google API key not found. Please set Google_API in your environment variables.")
+          console.error("Google API key not found. Please set NEXT_PUBLIC_GOOGLE_API in your environment variables.")
           return
         }
 
