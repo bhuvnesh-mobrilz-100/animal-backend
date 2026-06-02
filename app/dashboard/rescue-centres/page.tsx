@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +22,8 @@ type RescueCentre = {
   phone?: string | null;
   website?: string | null;
   is_verified: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
 
 const emptyForm = {
@@ -50,9 +53,13 @@ export default function RescueCentresPage() {
   async function loadCentres() {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/rescue-centres");
-      const json = await res.json();
-      setCentres(json.rescueCentres || []);
+      const { data, error } = await supabase
+        .from("rescue_centres")
+        .select("*")
+        .order("name");
+
+      if (error) throw error;
+      setCentres(data || []);
     } catch (error) {
       console.error("Error loading rescue centres:", error);
       toast.error("Failed to load rescue centres");
@@ -84,20 +91,40 @@ export default function RescueCentresPage() {
     event.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form };
-      const response = await fetch(
-        selected ? `/api/v1/rescue-centres?rescue_centre_id=${selected.rescue_centre_id}` : "/api/v1/rescue-centres",
-        {
-          method: selected ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      if (isEditing && selected) {
+        // Update existing rescue centre
+        const { error } = await supabase
+          .from("rescue_centres")
+          .update({
+            name: form.name,
+            description: form.description || null,
+            address: form.address,
+            phone: form.phone || null,
+            website: form.website || null,
+            is_verified: form.is_verified,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("rescue_centre_id", selected.rescue_centre_id);
 
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to save rescue centre");
+        if (error) throw error;
+        toast.success("Rescue centre updated");
+      } else {
+        // Create new rescue centre
+        const { error } = await supabase
+          .from("rescue_centres")
+          .insert([{
+            name: form.name,
+            description: form.description || null,
+            address: form.address,
+            phone: form.phone || null,
+            website: form.website || null,
+            is_verified: form.is_verified,
+          }]);
 
-      toast.success(selected ? "Rescue centre updated" : "Rescue centre created");
+        if (error) throw error;
+        toast.success("Rescue centre created");
+      }
+
       setFormOpen(false);
       setSelected(null);
       setForm(emptyForm);
@@ -114,9 +141,13 @@ export default function RescueCentresPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/rescue-centres?rescue_centre_id=${selected.rescue_centre_id}`, { method: "DELETE" });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to delete rescue centre");
+      const { error } = await supabase
+        .from("rescue_centres")
+        .delete()
+        .eq("rescue_centre_id", selected.rescue_centre_id);
+
+      if (error) throw error;
+      
       toast.success("Rescue centre deleted");
       setDeleteOpen(false);
       setSelected(null);

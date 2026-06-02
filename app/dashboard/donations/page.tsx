@@ -23,6 +23,8 @@ type DonationCampaign = {
   visible: boolean;
   expires_at?: string | null;
   rescue_centres?: { name?: string | null } | null;
+  created_at?: string;
+  updated_at?: string;
 };
 
 const emptyForm = {
@@ -53,15 +55,29 @@ export default function DonationsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [campaignRes, rescueRes] = await Promise.all([
-        fetch("/api/v1/donations"),
-        fetch("/api/v1/rescue-centres"),
-      ]);
+      // Load campaigns with rescue centre info
+      const { data: campaignsData, error: campaignsError } = await supabase
+        .from("donation_campaigns")
+        .select(`
+          *,
+          rescue_centres (
+            name
+          )
+        `)
+        .order("created_at", { ascending: false });
 
-      const campaignJson = await campaignRes.json();
-      const rescueJson = await rescueRes.json();
-      setCampaigns(campaignJson.campaigns || []);
-      setRescueCentres(rescueJson.rescueCentres || []);
+      if (campaignsError) throw campaignsError;
+
+      // Load rescue centres for dropdown
+      const { data: centresData, error: centresError } = await supabase
+        .from("rescue_centres")
+        .select("rescue_centre_id, name")
+        .order("name");
+
+      if (centresError) throw centresError;
+
+      setCampaigns(campaignsData || []);
+      setRescueCentres(centresData || []);
     } catch (error) {
       console.error("Error loading donations page:", error);
       toast.error("Failed to load donation data");
@@ -96,25 +112,34 @@ export default function DonationsPage() {
       const payload = {
         rescue_centre_id: Number(form.rescue_centre_id),
         title: form.title,
-        description: form.description,
+        description: form.description || null,
         monthly_target: Number(form.monthly_target),
         visible: form.visible,
         expires_at: form.expires_at || null,
       };
 
-      const response = await fetch(
-        selected ? `/api/v1/donations?campaign_id=${selected.campaign_id}` : "/api/v1/donations",
-        {
-          method: selected ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(selected ? payload : payload),
-        }
-      );
+      if (isEditing && selected) {
+        // Update existing campaign
+        const { error } = await supabase
+          .from("donation_campaigns")
+          .update({
+            ...payload,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("campaign_id", selected.campaign_id);
 
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to save campaign");
+        if (error) throw error;
+        toast.success("Campaign updated");
+      } else {
+        // Create new campaign
+        const { error } = await supabase
+          .from("donation_campaigns")
+          .insert([payload]);
 
-      toast.success(selected ? "Campaign updated" : "Campaign created");
+        if (error) throw error;
+        toast.success("Campaign created");
+      }
+
       setFormOpen(false);
       setSelected(null);
       setForm(emptyForm);
@@ -131,9 +156,13 @@ export default function DonationsPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/donations?campaign_id=${selected.campaign_id}`, { method: "DELETE" });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to delete campaign");
+      const { error } = await supabase
+        .from("donation_campaigns")
+        .delete()
+        .eq("campaign_id", selected.campaign_id);
+
+      if (error) throw error;
+      
       toast.success("Campaign deleted");
       setDeleteOpen(false);
       setSelected(null);
@@ -210,7 +239,7 @@ export default function DonationsPage() {
               <CardContent className="space-y-2 text-sm">
                 <div>{campaign.description || "No description"}</div>
                 <div className="flex flex-wrap gap-4 text-muted-foreground">
-                  <span>Target: {campaign.monthly_target}</span>
+                  <span>Target: R{campaign.monthly_target.toLocaleString()}</span>
                   <span>Status: {campaign.visible ? "Visible" : "Hidden"}</span>
                   <span>Expires: {campaign.expires_at ? new Date(campaign.expires_at).toLocaleDateString() : "No expiry"}</span>
                 </div>
@@ -256,8 +285,16 @@ export default function DonationsPage() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="monthly_target">Monthly Target</Label>
-                <Input id="monthly_target" type="number" min="0" value={form.monthly_target} onChange={(e) => setForm((prev) => ({ ...prev, monthly_target: e.target.value }))} required />
+                <Label htmlFor="monthly_target">Monthly Target (R)</Label>
+                <Input 
+                  id="monthly_target" 
+                  type="number" 
+                  min="0" 
+                  step="0.01"
+                  value={form.monthly_target} 
+                  onChange={(e) => setForm((prev) => ({ ...prev, monthly_target: e.target.value }))} 
+                  required 
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="expires_at">Expires At</Label>

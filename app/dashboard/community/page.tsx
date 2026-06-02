@@ -18,6 +18,7 @@ type CommunityPost = {
   body: string;
   created_at: string;
   user_id: number;
+  updated_at?: string;
 };
 
 const emptyForm = {
@@ -33,19 +34,45 @@ export default function CommunityPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<CommunityPost | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const isEditing = useMemo(() => Boolean(selected), [selected]);
 
   useEffect(() => {
     loadPosts();
+    getCurrentUser();
   }, []);
+
+  async function getCurrentUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Get user profile to get user_id
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("auth_user_id", user.id)
+          .single();
+        
+        if (profile) {
+          setCurrentUserId(profile.user_id);
+        }
+      }
+    } catch (error) {
+      console.error("Error getting current user:", error);
+    }
+  }
 
   async function loadPosts() {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/community");
-      const json = await res.json();
-      setPosts(json.posts || []);
+      const { data, error } = await supabase
+        .from("community_posts")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setPosts(data || []);
     } catch (error) {
       console.error("Error loading posts:", error);
       toast.error("Failed to load posts");
@@ -68,21 +95,46 @@ export default function CommunityPage() {
 
   async function submitForm(event: React.FormEvent) {
     event.preventDefault();
+    
+    if (!form.body.trim()) {
+      toast.error("Post body is required");
+      return;
+    }
+
     setSaving(true);
     try {
-      const response = await fetch(
-        selected ? `/api/v1/community?post_id=${selected.post_id}` : "/api/v1/community",
-        {
-          method: selected ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+      if (isEditing && selected) {
+        // Update existing post
+        const { error } = await supabase
+          .from("community_posts")
+          .update({
+            title: form.title || null,
+            body: form.body,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("post_id", selected.post_id);
+
+        if (error) throw error;
+        toast.success("Post updated");
+      } else {
+        // Create new post
+        if (!currentUserId) {
+          toast.error("You must be logged in to create a post");
+          return;
         }
-      );
 
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to save post");
+        const { error } = await supabase
+          .from("community_posts")
+          .insert([{
+            title: form.title || null,
+            body: form.body,
+            user_id: currentUserId,
+          }]);
 
-      toast.success(selected ? "Post updated" : "Post created");
+        if (error) throw error;
+        toast.success("Post created");
+      }
+
       setFormOpen(false);
       setSelected(null);
       setForm(emptyForm);
@@ -99,9 +151,13 @@ export default function CommunityPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/v1/community?post_id=${selected.post_id}`, { method: "DELETE" });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Failed to delete post");
+      const { error } = await supabase
+        .from("community_posts")
+        .delete()
+        .eq("post_id", selected.post_id);
+
+      if (error) throw error;
+      
       toast.success("Post deleted");
       setDeleteOpen(false);
       setSelected(null);
@@ -152,7 +208,9 @@ export default function CommunityPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <CardTitle>{post.title || "Untitled"}</CardTitle>
-                    <CardDescription>{new Date(post.created_at).toLocaleString()}</CardDescription>
+                    <CardDescription>
+                      Posted on {new Date(post.created_at).toLocaleDateString()} at {new Date(post.created_at).toLocaleTimeString()}
+                    </CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => openEdit(post)}>
@@ -174,7 +232,7 @@ export default function CommunityPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{post.body}</p>
+                <p className="whitespace-pre-wrap text-sm">{post.body}</p>
               </CardContent>
             </Card>
           ))}
@@ -186,17 +244,29 @@ export default function CommunityPage() {
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit Post" : "Add Post"}</DialogTitle>
             <DialogDescription>
-              Create a new community post or update an existing one.
+              {isEditing ? "Update your existing post." : "Create a new community post."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitForm} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input id="title" value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} />
+              <Label htmlFor="title">Title (Optional)</Label>
+              <Input 
+                id="title" 
+                value={form.title} 
+                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} 
+                placeholder="Enter a title for your post"
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="body">Body</Label>
-              <Textarea id="body" value={form.body} onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} required />
+              <Label htmlFor="body">Body *</Label>
+              <Textarea 
+                id="body" 
+                value={form.body} 
+                onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} 
+                placeholder="Write your post content here..."
+                rows={6}
+                required 
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
@@ -216,7 +286,7 @@ export default function CommunityPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete post?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the selected community post.
+              This will permanently delete the selected community post. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
