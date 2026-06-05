@@ -17,9 +17,7 @@ CREATE TABLE IF NOT EXISTS public.breeders (
     user_id BIGINT REFERENCES public.users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-COMMENT ON TABLE public.breeders IS 'Registered animal breeders';
+) COMMENT ON TABLE public.breeders IS 'Registered animal breeders';
 
 -- =============================
 -- 2. VETS TABLE (WITH EMERGENCY NUMBER)
@@ -38,9 +36,7 @@ CREATE TABLE IF NOT EXISTS public.vets (
     user_id BIGINT REFERENCES public.users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-COMMENT ON COLUMN public.vets.emergency_number IS 'Emergency contact number for urgent situations';
+) COMMENT ON COLUMN public.vets.emergency_number IS 'Emergency contact number for urgent situations';
 
 -- =============================
 -- 3. SERVICE PROVIDERS TABLE

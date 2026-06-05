@@ -44,9 +44,7 @@ import {
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
-import { NavDocuments } from "@/components/nav-documents";
 import { NavMain } from "@/components/nav-main";
-import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -94,36 +92,12 @@ const data = {
       icon: DatabaseIcon,
       roles: ["Owner", "Admin", "Manager"],
     },
-    {
-      title: "Breeders",
-      url: "/dashboard/breeders",
-      icon: UsersIcon,
-      roles: ["Owner", "Admin", "Manager"],
-    },
-    {
-      title: "Rescue Centres",
-      url: "/dashboard/rescue-centres",
-      icon: Building2,
-      roles: ["Owner", "Admin", "Manager"]
-    },
-    {
-      title: "Donations",
-      url: "/dashboard/donations",
-      icon: Coins,
-      roles: ["Owner", "Admin", "Manager"]
-    },
-    {
-      title: "Community",
-      url: "/dashboard/community",
-      icon: GroupIcon,
-      roles: ["Owner", "Admin", "Manager", "Subscriber"]
-    },
-    {
-      title: "Veterinarians",
-      url: "/dashboard/veterinarians",
-      icon: Stethoscope,
-      roles: ["Owner", "Admin", "Manager", "Provider"],
-    },
+    // {
+    //   title: "Breeders",
+    //   url: "/dashboard/breeders",
+    //   icon: UsersIcon,
+    //   roles: ["Owner", "Admin", "Manager"],
+    // },
     {
       title: "Service Categories",
       url: "/dashboard/service-categories",
@@ -138,6 +112,7 @@ const data = {
       roles: ["Owner", "Admin", "Manager", "Provider"],
       items: [],
     },
+    
     {
       title: "Pet Friendly Places",
       url: "/dashboard/pet-friendly-places",
@@ -164,6 +139,24 @@ const data = {
         "Subscriber",
         "Provider",
       ],
+    },
+    {
+      title: "Donations",
+      url: "/dashboard/donations",
+      icon: Coins,
+      roles: ["Owner", "Admin", "Manager"]
+    },
+    {
+      title: "Rescue Centres",
+      url: "/dashboard/rescue-centres",
+      icon: Building2,
+      roles: ["Owner", "Admin", "Manager"]
+    },
+    {
+      title: "Community",
+      url: "/dashboard/community",
+      icon: GroupIcon,
+      roles: ["Owner", "Admin", "Manager", "Subscriber"]
     },
     {
       title: "Users",
@@ -196,12 +189,12 @@ const data = {
       icon: Package,
       roles: ["Owner", "Admin", "Provider"],
     },
-    {
-      title: "Boosted",
-      url: "/dashboard/boosted",
-      icon: Zap,
-      roles: ["Owner", "Admin", "Provider"],
-    },
+    // {
+    //   title: "Boosted",
+    //   url: "/dashboard/boosted",
+    //   icon: Zap,
+    //   roles: ["Owner", "Admin", "Provider"],
+    // },
     {
       title: "Transactions",
       url: "/dashboard/transactions",
@@ -407,7 +400,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <NavMain items={mainNavData} />
-        <NavSecondary items={secondaryNavData} className="mt-auto" />
       </SidebarContent>
 
       <SidebarFooter>

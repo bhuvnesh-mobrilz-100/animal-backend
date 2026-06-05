@@ -1,8 +1,4 @@
 -- =============================
--- FILE 3: ENTITY-SPECIFIC ROLE SYSTEM
--- =============================
-
--- =============================
 -- 1. ADD MISSING COLUMN TO ROLES TABLE (IF NOT EXISTS)
 -- =============================
 ALTER TABLE public.roles 
