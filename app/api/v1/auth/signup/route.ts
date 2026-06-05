@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    return handleSignup(email, password, roleName || 'Subscriber');
+    return handleSignup(email, password, roleName || 'Guest');
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Signup failed' }, { status: 500 });
   }
@@ -22,7 +22,7 @@ export async function GET() {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
 
-async function handleSignup(email: string, password: string, roleName: string = 'Subscriber') {
+async function handleSignup(email: string, password: string, roleName: string = 'Guest') {
   try {
     if (!PUBLIC_SIGNUP_ROLE_NAMES.includes(roleName as any)) {
       return NextResponse.json({ error: 'Selected role is not available for public signup' }, { status: 400 });

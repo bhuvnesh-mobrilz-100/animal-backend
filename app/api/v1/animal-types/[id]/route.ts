@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const params = await context.params;
   const body = await readPayload(request);
+  console.log('Received PATCH payload:', body);
 
   if (!body || Object.keys(body).length === 0) {
     return NextResponse.json({ error: 'Request body cannot be empty' }, { status: 400 });
@@ -71,7 +72,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const updatePayload: Record<string, unknown> = { ...body };
   if (Object.prototype.hasOwnProperty.call(updatePayload, 'imageUrl')) {
-    updatePayload.image_url = updatePayload.imageUrl;
+    if (updatePayload.image_url === undefined || updatePayload.image_url === null) {
+      updatePayload.image_url = updatePayload.imageUrl;
+    }
     delete updatePayload.imageUrl;
   }
   if (Object.prototype.hasOwnProperty.call(updatePayload, 'file')) {

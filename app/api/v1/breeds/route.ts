@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/server-supabase';
+import { uploadAnimalImage } from '@/lib/storage-upload';
 
 type BreedPayload = {
   name?: unknown;
@@ -7,6 +8,7 @@ type BreedPayload = {
   image_url?: unknown;
   imageUrl?: unknown;
   animal_type_id?: unknown;
+  file?: unknown;
 };
 
 async function readPayload(request: NextRequest): Promise<BreedPayload> {
@@ -18,9 +20,10 @@ async function readPayload(request: NextRequest): Promise<BreedPayload> {
     return {
       name: formData.get('name'),
       description: formData.get('description'),
-      image_url: formData.get('image_url'),
+      image_url: formData.get('image_url') ?? formData.get('file'),
       imageUrl: formData.get('imageUrl'),
       animal_type_id: formData.get('animal_type_id'),
+      file: formData.get('file'),
     };
   }
 
@@ -31,13 +34,28 @@ async function readPayload(request: NextRequest): Promise<BreedPayload> {
   }
 }
 
-function normalizeImageUrl(value: unknown): string | null {
+function normalizeImageUrl(value: unknown): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
   if (typeof value !== 'string') {
     return null;
   }
 
   const trimmedValue = value.trim();
   return trimmedValue || null;
+}
+
+async function resolveImageUrl(payload: BreedPayload): Promise<string | null | undefined> {
+  const rawImageValue = payload.image_url ?? payload.imageUrl ?? payload.file;
+
+  if (rawImageValue instanceof File) {
+    const uploadResult = await uploadAnimalImage(rawImageValue, 'breeds');
+    return uploadResult.url;
+  }
+
+  return normalizeImageUrl(rawImageValue);
 }
 
 function normalizeAnimalTypeId(value: unknown): number | null {
@@ -83,7 +101,7 @@ export async function POST(request: NextRequest) {
   const body = await readPayload(request);
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const description = typeof body.description === 'string' ? body.description.trim() : '';
-  const image_url = normalizeImageUrl(body.image_url ?? body.imageUrl);
+  const image_url = await resolveImageUrl(body);
   const animal_type_id = normalizeAnimalTypeId(body.animal_type_id);
 
   if (!name) {
