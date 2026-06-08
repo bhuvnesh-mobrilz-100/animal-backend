@@ -24,19 +24,36 @@ export async function GET() {
 
 async function handleLogin(email: string, password: string) {
   try {
+    // 1. First check if user exists in auth.users (optional, but helps debugging)
+    const { data: existingUser, error: fetchError } = await supabaseAdmin
+      .from('users') // assuming you have a 'users' table linking auth_user_id
+      .select('auth_user_id, email, is_verified')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!existingUser) {
+      console.warn(`Login attempt for non-existent email: ${email}`);
+      // Return generic error for security
+      return NextResponse.json({ error: 'Invalid login credentials' }, { status: 401 });
+    }
+
+    // 2. Attempt sign in
     const { data, error } = await supabaseAdmin.auth.signInWithPassword({
       email,
       password,
-    } as any);
+    });
 
     if (error) {
-      return NextResponse.json({ error: error.message || 'Invalid credentials' }, { status: 401 });
+      // Log detailed error for debugging (but don't expose to client)
+      console.error('SignIn error:', error.message, error.status);
+      return NextResponse.json({ error: 'Invalid login credentials' }, { status: 401 });
     }
 
     if (data?.user && data.session?.access_token) {
       await setCurrentAccessTokenHash(data.user.id, data.session.access_token);
     }
 
+    // 3. Build auth profile – same as before
     const authProfile = data?.user
       ? await buildAuthProfile({
           id: data.user.id,
@@ -59,6 +76,7 @@ async function handleLogin(email: string, password: string) {
       { status: 200 }
     );
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Login error' }, { status: 500 });
+    console.error('Login exception:', err);
+    return NextResponse.json({ error: 'Login error' }, { status: 500 });
   }
 }

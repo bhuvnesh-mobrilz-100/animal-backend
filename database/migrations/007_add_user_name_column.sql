@@ -7,10 +7,15 @@ ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'guest',
 ADD COLUMN IF NOT EXISTS subscription_plan TEXT,
 ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP WITH TIME ZONE,
 ADD COLUMN IF NOT EXISTS static_location TEXT,
+ADD COLUMN IF NOT EXISTS latitude FLOAT NULL,
+ADD COLUMN IF NOT EXISTS longitude FLOAT NULL,
 ADD COLUMN IF NOT EXISTS preferred_radius INTEGER DEFAULT 25,
 ADD COLUMN IF NOT EXISTS notification_preferences JSONB DEFAULT '{"events": true, "warnings": true, "updates": true}',
 ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT TRUE,
-ADD COLUMN IF NOT EXISTS user_type TEXT DEFAULT 'guest';
+ADD COLUMN IF NOT EXISTS user_type TEXT DEFAULT 'guest',
+ADD COLUMN IF NOT EXISTS user_name TEXT GENERATED ALWAYS AS (name || ' ' || surname) STORED;
+CREATE INDEX IF NOT EXISTS idx_users_user_name ON public.users(user_name);
+
 -- 2. GROUPS TABLE
 CREATE TABLE IF NOT EXISTS public.groups (
     group_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
