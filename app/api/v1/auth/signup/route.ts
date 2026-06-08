@@ -179,7 +179,8 @@ async function handleSignup(
     return NextResponse.json({ error: 'Signup failed. Email might already exist.' }, { status: 400 });
   }
 
-  const createdUser = result.data.user ?? result.data;
+  const resultData = result.data;
+  const createdUser = 'user' in resultData ? resultData.user : resultData;
   const userId = createdUser?.id;
   if (!userId) {
     return NextResponse.json({ error: 'User creation returned no user id' }, { status: 400 });
@@ -245,7 +246,7 @@ async function handleSignup(
   }
 
   // 8. Obtain session and store token hash
-  let session = result.data.session ?? null;
+  let session = 'session' in resultData ? resultData.session ?? null : null;
   if (!session) {
     try {
       const login = await supabaseAdmin.auth.signInWithPassword({ email, password });
