@@ -276,10 +276,8 @@ export default function AuthProvider({ children }: any) {
 
   const logOutFunction = async () => {
     try {
-      await fetch("/api/v1/auth", {
+      await fetch("/api/v1/auth/logout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "logout" }),
       });
 
       const { error } = await supabase.auth.signOut();

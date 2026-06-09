@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/server-supabase';
 import { buildAuthProfile, PUBLIC_SIGNUP_ROLE_NAMES } from '@/lib/auth-profile';
-import { setCurrentAccessTokenHash } from '@/lib/auth-session';
+import { setCurrentTokenHashes } from '@/lib/auth-session';
 
 // ----------------------------------------------------------------------
 // Geocoding helper using Google Maps Geocoding API
@@ -53,16 +53,37 @@ function isStrongPassword(password: string): boolean {
 // ----------------------------------------------------------------------
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    let email = '';
+    let usernameInput = '';
+    let password = '';
+    let confirm_password = '';
+    let full_name = '';
+    let location: string | undefined = undefined;
+    let profile_image_url: string | undefined = undefined;
+    let roleName = 'Guest';
 
-    const email = formData.get('email')?.toString() || '';
-    const usernameInput = formData.get('username')?.toString() || '';
-    const password = formData.get('password')?.toString() || '';
-    const confirm_password = formData.get('confirm_password')?.toString() || '';
-    const full_name = formData.get('full_name')?.toString() || '';
-    const location = formData.get('location')?.toString() || undefined;
-    const profile_image_url = formData.get('profile_image_url')?.toString() || undefined;
-    const roleName = formData.get('roleName')?.toString() || 'Guest';
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await request.json().catch(() => ({}));
+      email = body?.email?.toString() || '';
+      usernameInput = body?.username?.toString() || '';
+      password = body?.password?.toString() || '';
+      confirm_password = body?.confirm_password?.toString() || '';
+      full_name = body?.full_name?.toString() || '';
+      location = body?.location?.toString() || undefined;
+      profile_image_url = body?.profile_image_url?.toString() || undefined;
+      roleName = body?.roleName?.toString() || 'Guest';
+    } else {
+      const formData = await request.formData();
+      email = formData.get('email')?.toString() || '';
+      usernameInput = formData.get('username')?.toString() || '';
+      password = formData.get('password')?.toString() || '';
+      confirm_password = formData.get('confirm_password')?.toString() || '';
+      full_name = formData.get('full_name')?.toString() || '';
+      location = formData.get('location')?.toString() || undefined;
+      profile_image_url = formData.get('profile_image_url')?.toString() || undefined;
+      roleName = formData.get('roleName')?.toString() || 'Guest';
+    }
 
     // Basic validation
     if (!email || !password) {
@@ -255,8 +276,8 @@ async function handleSignup(
       console.warn('Could not create session after signup:', err);
     }
   }
-  if (session?.access_token) {
-    await setCurrentAccessTokenHash(userId, session.access_token);
+  if (session?.access_token && session?.refresh_token) {
+    await setCurrentTokenHashes(userId, session.access_token, session.refresh_token);
   }
 
   // 9. Build auth profile

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/server-supabase';
-import { getTokenFromRequest } from '@/lib/server-auth';
+import { getUserFromRequest } from '@/lib/server-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,19 +8,16 @@ export async function POST(request: NextRequest) {
     const { action } = body as any;
 
     if (action === 'logout') {
-      const token = await getTokenFromRequest(request);
+      const user = await getUserFromRequest(request);
 
-      if (token) {
-        const { data } = await supabaseAdmin.auth.getUser(token);
-        const authUserId = data.user?.id;
-
-        if (authUserId) {
-          await supabaseAdmin
-            .from('users')
-            .update({ current_access_token_hash: null })
-            .eq('auth_user_id', authUserId);
-        }
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
+
+      await supabaseAdmin
+        .from('users')
+        .update({ current_access_token_hash: null })
+        .eq('auth_user_id', user.id);
 
       return NextResponse.json({ success: true });
     }
