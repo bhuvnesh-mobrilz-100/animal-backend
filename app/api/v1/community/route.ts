@@ -4,7 +4,10 @@ import { getUserFromRequest, requireRoles } from '@/lib/server-auth';
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search');
-  let query = supabaseAdmin.from('community_posts').select('*').order('created_at', { ascending: false });
+  let query = supabaseAdmin
+    .from('community_posts')
+    .select('*, post_likes(reaction), community_comments(comment_id)')
+    .order('created_at', { ascending: false });
 
   if (search) {
     query = query.ilike('title', `%${search}%`).or(`body.ilike.%${search}%`);
@@ -15,7 +18,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ posts: data });
+  const posts = (data || []).map((post: any) => {
+    const likes = Array.isArray(post.post_likes)
+      ? (post.post_likes as Array<{ reaction?: string }>)
+      : [];
+
+    return {
+      ...post,
+      likes_count: likes.filter((item) => item.reaction === 'like').length,
+      dislikes_count: likes.filter((item) => item.reaction === 'dislike').length,
+      comments_count: Array.isArray(post.community_comments) ? post.community_comments.length : 0,
+    };
+  });
+
+  return NextResponse.json({ posts });
 }
 
 export async function POST(request: NextRequest) {

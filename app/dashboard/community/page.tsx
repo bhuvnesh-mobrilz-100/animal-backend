@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Loader2, PlusCircle, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, PlusCircle, Pencil, Trash2, RefreshCw, ThumbsUp, ThumbsDown } from "lucide-react";
 import { toast } from "sonner";
 
 type CommunityPost = {
@@ -19,6 +19,23 @@ type CommunityPost = {
   created_at: string;
   user_id: number;
   updated_at?: string;
+  likes_count?: number;
+  dislikes_count?: number;
+  comments_count?: number;
+  comments?: Array<{
+    comment_id: number;
+    comment: string;
+    created_at: string;
+    updated_at?: string;
+    user_id: number;
+    users?: {
+      user_id: number;
+      user_name?: string | null;
+    };
+    author?: string;
+  }>;
+  post_likes?: unknown[];
+  community_comments?: unknown[];
 };
 
 const emptyForm = {
@@ -35,6 +52,7 @@ export default function CommunityPage() {
   const [selected, setSelected] = useState<CommunityPost | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [userReactions, setUserReactions] = useState<Record<number, 'like' | 'dislike'>>({});
 
   const isEditing = useMemo(() => Boolean(selected), [selected]);
 
@@ -47,15 +65,15 @@ export default function CommunityPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Get user profile to get user_id
         const { data: profile } = await supabase
           .from("profiles")
           .select("user_id")
           .eq("auth_user_id", user.id)
           .single();
-        
+
         if (profile) {
           setCurrentUserId(profile.user_id);
+          await loadUserReactions(profile.user_id);
         }
       }
     } catch (error) {
@@ -68,11 +86,32 @@ export default function CommunityPage() {
     try {
       const { data, error } = await supabase
         .from("community_posts")
-        .select("*")
+        .select(
+          "*, post_likes(reaction), community_comments(comment_id, comment, created_at, user_id, users(user_id, user_name))"
+        )
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setPosts(data || []);
+      const normalizedPosts = (data || []).map((post: any) => {
+        const likes = Array.isArray(post.post_likes)
+          ? (post.post_likes as Array<{ reaction?: string }> )
+          : [];
+        const comments = Array.isArray(post.community_comments)
+          ? (post.community_comments as Array<any>)
+          : [];
+
+        return {
+          ...post,
+          likes_count: likes.filter((item) => item.reaction === 'like').length,
+          dislikes_count: likes.filter((item) => item.reaction === 'dislike').length,
+          comments_count: comments.length,
+          comments: comments.map((comment) => ({
+            ...comment,
+            author: comment.users?.user_name || 'Unknown User',
+          })),
+        };
+      });
+      setPosts(normalizedPosts);
     } catch (error) {
       console.error("Error loading posts:", error);
       toast.error("Failed to load posts");
@@ -91,6 +130,78 @@ export default function CommunityPage() {
     setSelected(post);
     setForm({ title: post.title || "", body: post.body || "" });
     setFormOpen(true);
+  }
+
+  async function loadUserReactions(userId: number) {
+    try {
+      const { data, error } = await supabase
+        .from("post_likes")
+        .select("post_id, reaction")
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Error loading user reactions:", error);
+        return;
+      }
+
+      const reactions = (data || []).reduce((acc: Record<number, 'like' | 'dislike'>, item: any) => {
+        if (item.post_id && (item.reaction === 'like' || item.reaction === 'dislike')) {
+          acc[item.post_id] = item.reaction;
+        }
+        return acc;
+      }, {});
+
+      setUserReactions(reactions);
+    } catch (error) {
+      console.error("Error loading user reactions:", error);
+    }
+  }
+
+  async function submitReaction(postId: number, reaction: 'like' | 'dislike') {
+    if (!currentUserId) {
+      toast.error('Please log in to react to posts');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/v1/community/reactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ post_id: postId, reaction }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to submit reaction');
+      }
+
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.post_id === postId
+            ? {
+                ...post,
+                likes_count: result.likes_count,
+                dislikes_count: result.dislikes_count,
+              }
+            : post,
+        ),
+      );
+
+      setUserReactions((prev) => {
+        const next = { ...prev };
+        if (result.reaction) {
+          next[postId] = result.reaction;
+        } else {
+          delete next[postId];
+        }
+        return next;
+      });
+    } catch (error: any) {
+      console.error('Error submitting reaction:', error);
+      toast.error(error?.message || 'Failed to react to post');
+    }
   }
 
   async function submitForm(event: React.FormEvent) {
@@ -233,6 +344,48 @@ export default function CommunityPage() {
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-sm">{post.body}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={userReactions[post.post_id] === 'like' ? 'secondary' : 'outline'}
+                      size="sm"
+                      onClick={() => submitReaction(post.post_id, 'like')}
+                    >
+                      <ThumbsUp className="mr-2 h-4 w-4" />
+                      {post.likes_count ?? 0}
+                    </Button>
+                    <Button
+                      variant={userReactions[post.post_id] === 'dislike' ? 'secondary' : 'outline'}
+                      size="sm"
+                      onClick={() => submitReaction(post.post_id, 'dislike')}
+                    >
+                      <ThumbsDown className="mr-2 h-4 w-4" />
+                      {post.dislikes_count ?? 0}
+                    </Button>
+                  </div>
+                  <span>{post.comments_count ?? 0} comment{(post.comments_count ?? 0) === 1 ? "" : "s"}</span>
+                </div>
+                {post.comments && post.comments.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    {post.comments.slice(0, 3).map((comment) => (
+                      <div
+                        key={comment.comment_id}
+                        className="rounded-xl border border-slate-200/80 bg-slate-50 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                          <span className="font-semibold text-slate-700">{comment.users?.user_name || comment.author || 'Unknown User'}</span>
+                          <span>{new Date(comment.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-800">{comment.comment}</p>
+                      </div>
+                    ))}
+                    {post.comments.length > 3 && (
+                      <p className="text-xs text-muted-foreground">
+                        Showing {Math.min(3, post.comments.length)} of {post.comments.length} comments
+                      </p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
