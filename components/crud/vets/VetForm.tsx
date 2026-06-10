@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { createLocation, updateLocation } from "@/lib/locations-api"
 import { toast } from "sonner"
 import { validateVetName } from "@/lib/name-validation"
 
@@ -100,33 +101,20 @@ export function VetForm({ vet, onSuccess, onCancel }: VetFormProps) {
       // Handle location creation or update
       if (data.address) {
         if (data.location_id) {
-          // Update existing location
-          const { error: locationError } = await supabase
-            .from("locations")
-            .update({
-              address: data.address,
-              latitude: data.latitude,
-              longitude: data.longitude,
-              show_publicly: data.show_publicly,
-            })
-            .eq("location_id", data.location_id)
-
-          if (locationError) throw locationError
+          await updateLocation(data.location_id, {
+            address: data.address,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            show_publicly: data.show_publicly,
+          })
           locationId = data.location_id
         } else {
-          // Create new location
-          const { data: locationData, error: locationError } = await supabase
-            .from("locations")
-            .insert({
-              address: data.address,
-              latitude: data.latitude,
-              longitude: data.longitude,
-              show_publicly: data.show_publicly,
-            })
-            .select("location_id")
-            .single()
-
-          if (locationError) throw locationError
+          const locationData = await createLocation({
+            address: data.address,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            show_publicly: data.show_publicly,
+          })
           locationId = locationData.location_id
         }
       }

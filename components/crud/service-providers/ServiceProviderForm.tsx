@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { supabase } from "@/lib/supabase"
+import { createLocation, updateLocation } from "@/lib/locations-api"
 import { serviceProviderSchema, ServiceProvider } from "./schema"
 import { Button } from "@/components/ui/button"
 import { Form } from "@/components/ui/form"
@@ -18,6 +19,7 @@ import { ServicesAndBreedsTab } from "./ServicesAndBreedsTab"
 import { OperatingHoursTab } from "./OperatingHoursTab"
 import { ImagesTab } from "./ImagesTab"
 import { ServiceProviderImage } from "@/components/ui/multiple-image-upload"
+import { ImageUploadService } from "@/lib/image-upload"
 
 interface ServiceProviderFormProps {
   provider?: ServiceProvider
@@ -145,33 +147,20 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
       // Handle location creation or update
       if (values.address) {
         if (provider && provider.location_id) {
-          // Update existing location
-          const { error: locationError } = await supabase
-            .from("locations")
-            .update({
-              address: values.address,
-              latitude: values.latitude || null,
-              longitude: values.longitude || null,
-              show_publicly: values.show_publicly,
-            })
-            .eq("location_id", provider.location_id)
-
-          if (locationError) throw locationError
+          const locationData = await updateLocation(provider.location_id, {
+            address: values.address,
+            latitude: values.latitude || null,
+            longitude: values.longitude || null,
+            show_publicly: values.show_publicly,
+          })
           locationId = provider.location_id
         } else {
-          // Create new location
-          const { data: locationData, error: locationError } = await supabase
-            .from("locations")
-            .insert([{
-              address: values.address,
-              latitude: values.latitude || null,
-              longitude: values.longitude || null,
-              show_publicly: values.show_publicly,
-            }])
-            .select()
-            .single()
-
-          if (locationError) throw locationError
+          const locationData = await createLocation({
+            address: values.address,
+            latitude: values.latitude || null,
+            longitude: values.longitude || null,
+            show_publicly: values.show_publicly,
+          })
           locationId = locationData.location_id
         }
       }
@@ -234,14 +223,12 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }
         }
 
-        // Update breeds (for all service categories)
-        // First, delete existing breeds
+        // Update breeds
         await supabase
-          .from("breeder_breeds")
+          .from("service_provider_breeds")
           .delete()
           .eq("service_provider_id", provider.service_provider_id)
 
-        // Then insert new breeds
         if (selectedBreeds.length > 0) {
           const breedsData = selectedBreeds.map(breed => ({
             service_provider_id: provider.service_provider_id,
@@ -249,7 +236,7 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }))
 
           const { error: breedsError } = await supabase
-            .from("breeder_breeds")
+            .from("service_provider_breeds")
             .insert(breedsData)
 
           if (breedsError) {
@@ -258,8 +245,63 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }
         }
 
-        // Also ensure operating hours are updated
-        console.log("Updating operating hours:", values.operating_hours)
+        // Fetch existing images before updating to clean up storage
+        const { data: existingImages } = await supabase
+          .from("service_provider_images")
+          .select("image_url")
+          .eq("service_provider_id", provider.service_provider_id)
+
+        await supabase
+          .from("service_provider_images")
+          .delete()
+          .eq("service_provider_id", provider.service_provider_id)
+
+        const allImages: ServiceProviderImage[] = []
+
+        if (values.image_url && !images.some(img => img.image_url === values.image_url)) {
+          allImages.push({ image_url: values.image_url, order: 0 })
+        }
+
+        images.forEach((img) => {
+          if (!allImages.some(i => i.image_url === img.image_url)) {
+            allImages.push({ ...img, order: allImages.length })
+          }
+        })
+
+        if (allImages.length > 0) {
+          const imageData = allImages.map((img, index) => ({
+            service_provider_id: provider.service_provider_id,
+            image_url: img.image_url,
+            order: index,
+          }))
+
+          const { error: imagesError } = await supabase
+            .from("service_provider_images")
+            .insert(imageData)
+
+          if (imagesError) {
+            console.error("Error saving images:", imagesError)
+            toast.error("Service provider updated but failed to save images")
+          }
+        }
+
+        // Delete removed images from storage
+        if (existingImages) {
+          const newUrls = new Set(allImages.map(img => img.image_url))
+          for (const img of existingImages) {
+            if (!newUrls.has(img.image_url)) {
+              const filePath = ImageUploadService.extractFilePathFromUrl(img.image_url)
+              if (filePath) {
+                try {
+                  await ImageUploadService.deleteImage(filePath)
+                } catch (e) {
+                  console.warn("Failed to delete old image from storage:", e)
+                }
+              }
+            }
+          }
+        }
+
         toast.success("Service provider updated successfully")
       } else {
         const { data: providerResult, error } = await supabase
@@ -296,7 +338,6 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }
         }
 
-        // Save breeds if any (for all service categories)
         if (selectedBreeds.length > 0) {
           const breedsData = selectedBreeds.map(breed => ({
             service_provider_id: serviceProviderId,
@@ -304,7 +345,7 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }))
 
           const { error: breedsError } = await supabase
-            .from("breeder_breeds")
+            .from("service_provider_breeds")
             .insert(breedsData)
 
           if (breedsError) {
@@ -313,9 +354,21 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
           }
         }
 
-        // Save images if any
-        if (images.length > 0) {
-          const imageData = images.map((img, index) => ({
+        // Save images if any (includes profile image as first)
+        const allImages: ServiceProviderImage[] = []
+
+        if (providerData.image_url && !images.some(img => img.image_url === providerData.image_url)) {
+          allImages.push({ image_url: providerData.image_url, order: 0 })
+        }
+
+        images.forEach((img) => {
+          if (!allImages.some(i => i.image_url === img.image_url)) {
+            allImages.push({ ...img, order: allImages.length })
+          }
+        })
+
+        if (allImages.length > 0) {
+          const imageData = allImages.map((img, index) => ({
             service_provider_id: serviceProviderId,
             image_url: img.image_url,
             order: index,
@@ -349,14 +402,14 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
         <Tabs defaultValue="basic" className="w-full">
           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
+            <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="contact">Contact & Location</TabsTrigger>
             <TabsTrigger value="hours">Operating Hours</TabsTrigger>
             <TabsTrigger value="services">Services & Breeds</TabsTrigger>
-            <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basic">
+          <TabsContent forceMount value="basic">
             <BasicInfoTab 
               form={form} 
               categories={categories}
@@ -365,15 +418,24 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
             />
           </TabsContent>
 
-          <TabsContent value="contact">
+          <TabsContent forceMount value="images">
+            <ImagesTab 
+              serviceProviderId={provider?.service_provider_id}
+              onImagesChange={setImages}
+              profileImageUrl={form.watch("image_url")}
+              onProfileImageChange={(url) => form.setValue("image_url", url)}
+            />
+          </TabsContent>
+
+          <TabsContent forceMount value="contact">
             <ContactLocationTab form={form} />
           </TabsContent>
 
-          <TabsContent value="hours">
+          <TabsContent forceMount value="hours">
             <OperatingHoursTab form={form} />
           </TabsContent>
 
-          <TabsContent value="services">
+          <TabsContent forceMount value="services">
             <ServicesAndBreedsTab 
               serviceCategoryId={form.watch("service_category_id")}
               serviceProviderId={provider?.service_provider_id}
@@ -382,14 +444,7 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
             />
           </TabsContent>
 
-          <TabsContent value="images">
-            <ImagesTab 
-              serviceProviderId={provider?.service_provider_id}
-              onImagesChange={setImages}
-            />
-          </TabsContent>
-
-          <TabsContent value="settings">
+          <TabsContent forceMount value="settings">
             <SettingsTab form={form} />
           </TabsContent>
         </Tabs>

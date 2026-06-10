@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { MultipleImageUpload, ServiceProviderImage } from "@/components/ui/multiple-image-upload"
 import { toast } from "sonner"
@@ -8,11 +8,13 @@ import { Loader2 } from "lucide-react"
 
 interface ImagesTabProps {
   serviceProviderId?: number
+  profileImageUrl?: string
   onImagesChange?: (images: ServiceProviderImage[]) => void
+  onProfileImageChange?: (url: string) => void
 }
 
-export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps) {
-  const [images, setImages] = useState<ServiceProviderImage[]>([])
+export function ImagesTab({ serviceProviderId, profileImageUrl, onImagesChange, onProfileImageChange }: ImagesTabProps) {
+  const [galleryImages, setGalleryImages] = useState<ServiceProviderImage[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -40,8 +42,7 @@ export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps)
         order: img.order,
       }))
 
-      setImages(formattedImages)
-      onImagesChange?.(formattedImages)
+      setGalleryImages(formattedImages)
     } catch (error) {
       console.error("Error fetching images:", error)
       toast.error("Failed to load images")
@@ -50,47 +51,31 @@ export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps)
     }
   }
 
-  const handleImagesChange = async (newImages: ServiceProviderImage[]) => {
-    setImages(newImages)
-    onImagesChange?.(newImages)
+  const allImages: ServiceProviderImage[] = useMemo(() => {
+    const combined: ServiceProviderImage[] = []
 
-    // If we have a service provider ID, save changes immediately
-    if (serviceProviderId) {
-      await saveImages(newImages)
+    if (profileImageUrl && !galleryImages.some(img => img.image_url === profileImageUrl)) {
+      combined.push({ image_url: profileImageUrl, order: 0 })
     }
-  }
 
-  const saveImages = async (imagesToSave: ServiceProviderImage[]) => {
-    if (!serviceProviderId) return
-
-    try {
-      // Delete all existing images for this service provider
-      const { error: deleteError } = await supabase
-        .from("service_provider_images")
-        .delete()
-        .eq("service_provider_id", serviceProviderId)
-
-      if (deleteError) throw deleteError
-
-      // Insert new images if any
-      if (imagesToSave.length > 0) {
-        const imageData = imagesToSave.map((img, index) => ({
-          service_provider_id: serviceProviderId,
-          image_url: img.image_url,
-          order: index,
-        }))
-
-        const { error: insertError } = await supabase
-          .from("service_provider_images")
-          .insert(imageData)
-
-        if (insertError) throw insertError
+    galleryImages.forEach((img) => {
+      if (!combined.some(i => i.image_url === img.image_url)) {
+        combined.push({ ...img, order: combined.length })
       }
+    })
 
-      toast.success("Images updated successfully")
-    } catch (error) {
-      console.error("Error saving images:", error)
-      toast.error("Failed to save images")
+    return combined
+  }, [profileImageUrl, galleryImages])
+
+  const handleImagesChange = (newImages: ServiceProviderImage[]) => {
+    const profileUrl = newImages.length > 0 ? newImages[0].image_url : ""
+    const galleryOnly = newImages.slice(1)
+
+    setGalleryImages(galleryOnly)
+    onImagesChange?.(galleryOnly)
+
+    if (profileUrl !== profileImageUrl) {
+      onProfileImageChange?.(profileUrl)
     }
   }
 
@@ -108,11 +93,12 @@ export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps)
         <h3 className="text-lg font-medium">Service Provider Images</h3>
         <p className="text-sm text-muted-foreground">
           Upload and manage images for this service provider. You can drag and drop to reorder them.
+          The first image is your profile picture.
         </p>
       </div>
 
       <MultipleImageUpload
-        value={images}
+        value={allImages}
         onChange={handleImagesChange}
         folder="service-providers"
         label="Images"
@@ -120,7 +106,7 @@ export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps)
         maxSize={5}
       />
 
-      {!serviceProviderId && images.length > 0 && (
+      {!serviceProviderId && allImages.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
           <p className="text-sm text-blue-800">
             <strong>Note:</strong> Images will be saved when you create the service provider.

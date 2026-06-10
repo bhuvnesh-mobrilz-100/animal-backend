@@ -2,7 +2,6 @@
 
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ImageUpload } from "@/components/ui/image-upload"
 import {
   Select,
   SelectContent,
@@ -118,26 +117,6 @@ export function BasicInfoTab({ form, categories, hideCategorySelector, selectedC
                 className="resize-none"
                 rows={4}
                 {...field}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name="image_url"
-        render={({ field }) => (
-          <FormItem>
-            <FormControl>
-              <ImageUpload
-                value={field.value || ""}
-                onChange={field.onChange}
-                label="Service Provider Image"
-                folder="service-providers"
-                placeholder="Upload service provider image or enter URL"
-                variant="avatar"
               />
             </FormControl>
             <FormMessage />

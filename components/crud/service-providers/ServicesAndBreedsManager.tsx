@@ -101,7 +101,7 @@ export function ServicesAndBreedsManager({
   const fetchSelectedBreeds = async () => {
     try {
       const { data, error } = await supabase
-        .from("breeder_breeds")
+        .from("service_provider_breeds")
         .select(`
           *,
           breed:breeds(
@@ -195,7 +195,7 @@ export function ServicesAndBreedsManager({
       // Remove breeds
       if (breedsToRemove.length > 0) {
         const { error: deleteError } = await supabase
-          .from("breeder_breeds")
+          .from("service_provider_breeds")
           .delete()
           .eq("service_provider_id", serviceProviderId)
           .in("breed_id", breedsToRemove.map(id => parseInt(id)))
@@ -206,7 +206,7 @@ export function ServicesAndBreedsManager({
       // Add breeds
       if (breedsToAdd.length > 0) {
         const { error: insertError } = await supabase
-          .from("breeder_breeds")
+          .from("service_provider_breeds")
           .insert(
             breedsToAdd.map(breedId => ({
               service_provider_id: serviceProviderId,

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { supabase } from "@/lib/supabase"
+import { createLocation, updateLocation } from "@/lib/locations-api"
 import { eventSchema, Event } from "./schema"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -74,31 +75,20 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
 
       if (values.address) {
         if (values.location_id) {
-          const { error: locationError } = await supabase
-            .from("locations")
-            .update({
-              address: values.address,
-              latitude: values.latitude,
-              longitude: values.longitude,
-              show_publicly: values.show_publicly,
-            })
-            .eq("location_id", values.location_id)
-
-          if (locationError) throw locationError
+          await updateLocation(values.location_id, {
+            address: values.address,
+            latitude: values.latitude,
+            longitude: values.longitude,
+            show_publicly: values.show_publicly,
+          })
           locationId = values.location_id
         } else {
-          const { data: locationData, error: locationError } = await supabase
-            .from("locations")
-            .insert({
-              address: values.address,
-              latitude: values.latitude,
-              longitude: values.longitude,
-              show_publicly: values.show_publicly,
-            })
-            .select("location_id")
-            .single()
-
-          if (locationError) throw locationError
+          const locationData = await createLocation({
+            address: values.address,
+            latitude: values.latitude,
+            longitude: values.longitude,
+            show_publicly: values.show_publicly,
+          })
           locationId = locationData.location_id
         }
       }

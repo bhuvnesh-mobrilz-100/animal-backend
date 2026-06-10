@@ -110,7 +110,7 @@ export function ServicesAndBreedsTab({
     
     try {
       const { data, error } = await supabase
-        .from("breeder_breeds")
+        .from("service_provider_breeds")
         .select("breed_id")
         .eq("service_provider_id", serviceProviderId)
 

@@ -89,7 +89,7 @@ export function StatsDashboard() {
           .lt('start_date', new Date().toISOString())
           .gt('end_date', new Date().toISOString()),
 
-        // Get animal types with breed counts and breeder coverage in one efficient query
+        // Get animal types with breed counts and provider coverage in one efficient query
         supabase
           .from('animal_types')
           .select(`
@@ -97,9 +97,9 @@ export function StatsDashboard() {
             name,
             breeds!breeds_animal_type_id_fkey(
               breed_id,
-              breeder_breeds!breeder_breeds_breed_id_fkey(
+              service_provider_breeds!service_provider_breeds_breed_id_fkey(
                 service_provider_id,
-                service_providers!breeder_breeds_service_provider_id_fkey(
+                service_providers!service_provider_breeds_service_provider_id_fkey(
                   is_active,
                   is_deleted
                 )
@@ -142,26 +142,26 @@ export function StatsDashboard() {
         animalTypesResult.data.forEach((animalType: any) => {
           const totalBreeds = animalType.breeds?.length || 0
           
-          // Get unique breeds that have active breeders
-          const breedsWithActiveBreeders = new Set()
+          // Get unique breeds that have active providers
+          const breedsWithActiveProviders = new Set()
           
           animalType.breeds?.forEach((breed: any) => {
-            const hasActiveBreeders = breed.breeder_breeds?.some((breederBreed: any) => 
-              breederBreed.service_providers?.is_active === true && 
-              breederBreed.service_providers?.is_deleted === false
+            const hasActiveBreeders = breed.service_provider_breeds?.some((spb: any) => 
+              spb.service_providers?.is_active === true && 
+              spb.service_providers?.is_deleted === false
             )
             
             if (hasActiveBreeders) {
-              breedsWithActiveBreeders.add(breed.breed_id)
+              breedsWithActiveProviders.add(breed.breed_id)
             }
           })
 
-          const breedsWithBreedersCount = breedsWithActiveBreeders.size
-          const percentage = totalBreeds > 0 ? (breedsWithBreedersCount / totalBreeds) * 100 : 0
+          const breedsWithProvidersCount = breedsWithActiveProviders.size
+          const percentage = totalBreeds > 0 ? (breedsWithProvidersCount / totalBreeds) * 100 : 0
 
           animalTypesWithDistribution.push({
             name: animalType.name,
-            value: breedsWithBreedersCount,
+            value: breedsWithProvidersCount,
             percentage: Math.round(percentage * 100) / 100,
             id: animalType.animal_type_id
           })
