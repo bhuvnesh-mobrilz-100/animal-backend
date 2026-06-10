@@ -4,9 +4,10 @@ import { getUserFromRequest, requireRoles } from '@/lib/server-auth';
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search');
+
   let query = supabaseAdmin
     .from('community_posts')
-    .select('*, post_likes(reaction), community_comments(comment_id)')
+    .select('*, post_likes(reaction), community_comments(user_id,comment,created_at,updated_at,users ( name ) )')
     .order('created_at', { ascending: false });
 
   if (search) {
