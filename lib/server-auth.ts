@@ -156,6 +156,10 @@ export function buildErrorResponse(message: string, status: number = 401) {
   return NextResponse.json({ error: message }, { status });
 }
 
+function normalizeRoleName(roleName: string | undefined | null): string {
+  return String(roleName || '').trim().toLowerCase();
+}
+
 export async function requireRoles(
   request: NextRequest,
   allowedRoleNames: string[]
@@ -166,7 +170,10 @@ export async function requireRoles(
     return buildErrorResponse('Authentication required', 401);
   }
 
-  if (!allowedRoleNames.some((role) => user.roleNames.includes(role))) {
+  const normalizedAllowed = allowedRoleNames.map(normalizeRoleName);
+  const normalizedUserRoles = user.roleNames.map(normalizeRoleName);
+
+  if (!normalizedAllowed.some((role) => normalizedUserRoles.includes(role))) {
     return buildErrorResponse('Permission denied', 403);
   }
 
@@ -210,7 +217,8 @@ export async function getUserPermissionNames(user: AuthenticatedUser): Promise<s
 }
 
 export function hasManagementRole(roleNames: string[]): boolean {
-  return roleNames.some((roleName) => ['Admin', 'Owner', 'Manager'].includes(roleName));
+  const normalizedRoles = roleNames.map(normalizeRoleName);
+  return ['admin', 'owner', 'manager'].some((role) => normalizedRoles.includes(role));
 }
 
 export async function recordAuditLog(payload: {

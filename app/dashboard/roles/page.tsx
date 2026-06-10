@@ -1,13 +1,22 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Shield, Users as UsersIcon, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/providers/AuthProvider";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface Permission {
   permission_id: number;
@@ -22,6 +31,7 @@ interface Role {
   is_system_role: boolean;
   permissions: Permission[];
   user_count: number;
+  can_edit?: boolean;
 }
 
 interface User {
@@ -34,6 +44,12 @@ interface User {
   subscription_status: string;
 }
 
+interface RolePermission {
+  permission_id: number;
+  name: string;
+  description: string;
+}
+
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,13 +57,16 @@ export default function RolesPage() {
   const [roleUsers, setRoleUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isUsersDialogOpen, setIsUsersDialogOpen] = useState(false);
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [availablePermissions, setAvailablePermissions] = useState<RolePermission[]>([]);
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<number[]>([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsSaving, setPermissionsSaving] = useState(false);
   const { toast } = useToast();
   const { session } = useAuth();
 
   useEffect(() => {
-    // Fetch roles when session becomes available so Authorization header is included
     fetchRoles();
-    // also re-run when session changes (will re-fetch with token)
   }, [session]);
 
   const fetchRoles = async () => {
@@ -57,7 +76,6 @@ export default function RolesPage() {
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
       const response = await fetch('/api/v1/roles', { headers });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch roles');
@@ -87,7 +105,6 @@ export default function RolesPage() {
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
       const response = await fetch(`/api/v1/roles/${role.role_id}/users`, { headers });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch users');
@@ -108,6 +125,91 @@ export default function RolesPage() {
     }
   };
 
+  const loadRolePermissions = async (role: Role) => {
+    try {
+      setSelectedRole(role);
+      setPermissionsLoading(true);
+      setAvailablePermissions([]);
+      setSelectedPermissionIds([]);
+
+      const headers: HeadersInit = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+      const response = await fetch(`/api/v1/roles/${role.role_id}/permissions`, { headers });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch role permissions');
+      }
+
+      const data = await response.json();
+      setAvailablePermissions(data.permissions || []);
+      setSelectedPermissionIds(data.selectedPermissionIds || []);
+      setIsPermissionsDialogOpen(true);
+    } catch (error: any) {
+      console.error('Error loading role permissions:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to load role permissions',
+        variant: 'destructive',
+      });
+    } finally {
+      setPermissionsLoading(false);
+    }
+  };
+
+  const handlePermissionToggle = (permissionId: number, enabled: boolean) => {
+    setSelectedPermissionIds((current) =>
+      enabled ? [...current, permissionId] : current.filter((id) => id !== permissionId)
+    );
+  };
+
+  const saveRolePermissions = async () => {
+    if (!selectedRole) return;
+
+    try {
+      setPermissionsSaving(true);
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+      const response = await fetch(`/api/v1/roles/${selectedRole.role_id}/permissions`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ permissionIds: selectedPermissionIds }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save role permissions');
+      }
+
+      const data = await response.json();
+      const updatedPermissions: RolePermission[] = data.permissions || [];
+
+      setRoles((current) =>
+        current.map((role) =>
+          role.role_id === selectedRole.role_id ? { ...role, permissions: updatedPermissions } : role
+        )
+      );
+      setSelectedRole((current) => (current ? { ...current, permissions: updatedPermissions } : current));
+      setIsPermissionsDialogOpen(false);
+      toast({
+        title: 'Permissions updated',
+        description: 'Role permissions were saved successfully.',
+      });
+    } catch (error: any) {
+      console.error('Error saving role permissions:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Unable to save role permissions',
+        variant: 'destructive',
+      });
+    } finally {
+      setPermissionsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -118,13 +220,11 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center space-x-2">
         <Shield className="h-8 w-8 text-primary" />
         <h1 className="text-3xl font-bold">Roles & Permissions</h1>
       </div>
 
-      {/* Roles Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {roles.map((role) => (
           <Card key={role.role_id} className="hover:shadow-lg transition-shadow cursor-pointer">
@@ -143,7 +243,6 @@ export default function RolesPage() {
               <p className="text-sm text-muted-foreground line-clamp-2">{role.description}</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* User Count - Clickable */}
               <button
                 onClick={() => handleViewUsers(role)}
                 className="w-full flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -155,7 +254,6 @@ export default function RolesPage() {
                 <span className="text-xs text-muted-foreground">→</span>
               </button>
 
-              {/* Permissions Summary */}
               {role.permissions && role.permissions.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">
@@ -176,27 +274,27 @@ export default function RolesPage() {
                 </div>
               )}
 
-              {/* View Users Button */}
+              <Button onClick={() => handleViewUsers(role)} variant="outline" size="sm" className="w-full">
+                View Users ({role.user_count})
+              </Button>
+
               <Button
-                onClick={() => handleViewUsers(role)}
-                variant="outline"
+                onClick={() => loadRolePermissions(role)}
+                variant={role.can_edit ? 'secondary' : 'ghost'}
                 size="sm"
                 className="w-full"
               >
-                View Users ({role.user_count})
+                {role.can_edit ? 'Edit Permissions' : 'View Permissions'}
               </Button>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Users Dialog */}
       <Dialog open={isUsersDialogOpen} onOpenChange={setIsUsersDialogOpen}>
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
-            <DialogTitle>
-              Users with {selectedRole?.name} Role ({roleUsers.length})
-            </DialogTitle>
+            <DialogTitle>Users with {selectedRole?.name} Role ({roleUsers.length})</DialogTitle>
           </DialogHeader>
 
           {loadingUsers ? (
@@ -219,12 +317,8 @@ export default function RolesPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>
-                          Joined: {new Date(user.created_at).toLocaleDateString()}
-                        </span>
-                        <span className="capitalize">
-                          Status: {user.subscription_status || 'active'}
-                        </span>
+                        <span>Joined: {new Date(user.created_at).toLocaleDateString()}</span>
+                        <span className="capitalize">Status: {user.subscription_status || 'active'}</span>
                       </div>
                     </div>
                   </div>
@@ -232,10 +326,66 @@ export default function RolesPage() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">
-              No users with this role yet.
-            </p>
+            <p className="text-center text-muted-foreground py-8">No users with this role yet.</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>{selectedRole?.name} Permissions</DialogTitle>
+            <DialogDescription>
+              {selectedRole?.is_system_role
+                ? 'System roles cannot be modified.'
+                : 'Toggle permissions for this role and save your changes.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {permissionsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="space-y-4 max-h-[500px] overflow-y-auto py-2">
+              {availablePermissions.length > 0 ? (
+                availablePermissions.map((permission) => (
+                  <div
+                    key={permission.permission_id}
+                    className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div className="pt-1">
+                      <Checkbox
+                        id={`permission-${permission.permission_id}`}
+                        checked={selectedPermissionIds.includes(permission.permission_id)}
+                        onCheckedChange={(checked) => handlePermissionToggle(permission.permission_id, checked as boolean)}
+                        disabled={selectedRole?.is_system_role}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <Label htmlFor={`permission-${permission.permission_id}`} className="font-medium cursor-pointer">
+                        {permission.name}
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {permission.description}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No permissions available for this role.</p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsPermissionsDialogOpen(false)} disabled={permissionsSaving}>
+              Cancel
+            </Button>
+            <Button onClick={saveRolePermissions} disabled={permissionsSaving || permissionsLoading || selectedRole?.is_system_role}>
+              {permissionsSaving ? 'Saving...' : 'Save Permissions'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

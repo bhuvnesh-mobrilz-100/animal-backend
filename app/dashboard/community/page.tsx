@@ -16,6 +16,7 @@ type CommunityPost = {
   post_id: number;
   title?: string | null;
   body: string;
+  image_url?: string | null;
   created_at: string;
   user_id: number;
   updated_at?: string;
@@ -38,9 +39,16 @@ type CommunityPost = {
   community_comments?: unknown[];
 };
 
-const emptyForm = {
+type CommunityFormState = {
+  title: string;
+  body: string;
+  file: File | null;
+};
+
+const emptyForm: CommunityFormState = {
   title: "",
   body: "",
+  file: null,
 };
 
 export default function CommunityPage() {
@@ -50,7 +58,7 @@ export default function CommunityPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<CommunityPost | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<CommunityFormState>(emptyForm);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [userReactions, setUserReactions] = useState<Record<number, 'like' | 'dislike'>>({});
 
@@ -79,6 +87,15 @@ export default function CommunityPage() {
     } catch (error) {
       console.error("Error getting current user:", error);
     }
+  }
+
+  async function getAuthHeaders() {
+    const { data } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {};
+    if (data?.session?.access_token) {
+      headers.Authorization = `Bearer ${data.session.access_token}`;
+    }
+    return headers;
   }
 
   async function loadPosts() {
@@ -128,7 +145,11 @@ export default function CommunityPage() {
 
   function openEdit(post: CommunityPost) {
     setSelected(post);
-    setForm({ title: post.title || "", body: post.body || "" });
+    setForm({
+      title: post.title || "",
+      body: post.body || "",
+      file: null,
+    });
     setFormOpen(true);
   }
 
@@ -164,10 +185,12 @@ export default function CommunityPage() {
     }
 
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch('/api/v1/community/reactions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...headers,
         },
         body: JSON.stringify({ post_id: postId, reaction }),
       });
@@ -214,38 +237,31 @@ export default function CommunityPage() {
 
     setSaving(true);
     try {
-      if (isEditing && selected) {
-        // Update existing post
-        const { error } = await supabase
-          .from("community_posts")
-          .update({
-            title: form.title || null,
-            body: form.body,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("post_id", selected.post_id);
-
-        if (error) throw error;
-        toast.success("Post updated");
-      } else {
-        // Create new post
-        if (!currentUserId) {
-          toast.error("You must be logged in to create a post");
-          return;
-        }
-
-        const { error } = await supabase
-          .from("community_posts")
-          .insert([{
-            title: form.title || null,
-            body: form.body,
-            user_id: currentUserId,
-          }]);
-
-        if (error) throw error;
-        toast.success("Post created");
+      const formData = new FormData();
+      formData.append('title', form.title);
+      formData.append('body', form.body);
+      if (form.file) {
+        formData.append('file', form.file);
       }
 
+      const endpoint = isEditing && selected
+        ? `/api/v1/community?post_id=${selected.post_id}`
+        : '/api/v1/community';
+      const method = isEditing ? 'PATCH' : 'POST';
+
+      const headers = await getAuthHeaders();
+      const response = await fetch(endpoint, {
+        method,
+        headers,
+        body: formData,
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to save post');
+      }
+
+      toast.success(isEditing ? "Post updated" : "Post created");
       setFormOpen(false);
       setSelected(null);
       setForm(emptyForm);
@@ -262,13 +278,17 @@ export default function CommunityPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("community_posts")
-        .delete()
-        .eq("post_id", selected.post_id);
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/v1/community?post_id=${selected.post_id}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      if (error) throw error;
-      
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to delete post');
+      }
+
       toast.success("Post deleted");
       setDeleteOpen(false);
       setSelected(null);
@@ -343,6 +363,13 @@ export default function CommunityPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {post.image_url ? (
+                  <img
+                    src={post.image_url}
+                    alt={post.title || "Community post image"}
+                    className="mb-4 h-auto w-full rounded-xl object-cover"
+                  />
+                ) : null}
                 <p className="whitespace-pre-wrap text-sm">{post.body}</p>
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
@@ -409,6 +436,19 @@ export default function CommunityPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} 
                 placeholder="Enter a title for your post"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="file">Image file (Optional)</Label>
+              <input
+                id="file"
+                type="file"
+                accept="image/*"
+                className="file-input-bordered file-input w-full"
+                onChange={(e) => setForm((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }))}
+              />
+              {form.file && (
+                <p className="text-sm text-muted-foreground">Selected file: {form.file.name}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="body">Body *</Label>
