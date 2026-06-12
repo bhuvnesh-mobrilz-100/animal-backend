@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { DataTableColumnHeader } from "../DataTableColumnHeader"
 import { Event } from "./schema"
 import { format } from "date-fns"
+import Image from "next/image"
 
 export const columns: ColumnDef<Event>[] = [
   {
@@ -26,6 +27,28 @@ export const columns: ColumnDef<Event>[] = [
             </span>
           )}
         </div>
+      )
+    },
+  },
+  {
+    accessorKey: "image_url",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Image" />
+    ),
+    cell: ({ row }) => {
+      const url = row.getValue("image_url") as string
+      return url ? (
+        <div className="relative h-10 w-16 rounded-md overflow-hidden">
+          <Image
+            src={url}
+            alt="Event"
+            fill
+            className="object-cover"
+            sizes="64px"
+          />
+        </div>
+      ) : (
+        <span className="text-muted-foreground text-sm">-</span>
       )
     },
   },

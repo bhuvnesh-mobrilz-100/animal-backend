@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -32,31 +32,43 @@ export function ImageUpload({
   className = "",
   variant = "default",
   disabled = false,
-  maxSize = 5,
+  maxSize = 20,
   accept = "image/*"
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (localPreview) {
+        URL.revokeObjectURL(localPreview);
+      }
+    };
+  }, [localPreview]);
 
   const handleFileUpload = async (file: File) => {
     if (disabled) return;
 
-    try {
-      setIsUploading(true);
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
+    setIsUploading(true);
 
-      // Validate file size
+    try {
       if (file.size > maxSize * 1024 * 1024) {
         throw new Error(`File size must be less than ${maxSize}MB`);
       }
 
       const result = await ImageUploadService.replaceImage(file, value, folder);
       onChange(result.url);
+      setLocalPreview(null);
       toast.success('Image uploaded successfully');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Upload failed';
       toast.error(errorMessage);
       onError?.(errorMessage);
+      setLocalPreview(null);
     } finally {
       setIsUploading(false);
     }
@@ -72,7 +84,7 @@ export function ImageUpload({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    
+
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
       handleFileUpload(file);
@@ -91,17 +103,89 @@ export function ImageUpload({
 
   const handleRemoveImage = () => {
     onChange('');
+    setLocalPreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const renderUploadArea = () => {
+  const displayUrl = localPreview || value || '';
+
+  const renderImagePreview = () => {
+    const hasImage = !!displayUrl;
+
+    if (variant === 'card') {
+      return (
+        <div
+          className={`
+            relative rounded-lg overflow-hidden border
+            ${dragActive ? 'border-primary ring-2 ring-primary' : 'border-border'}
+            ${disabled ? 'opacity-50' : 'cursor-pointer hover:opacity-90'}
+            transition-all
+          `}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+        >
+          {hasImage ? (
+            <div className="relative aspect-video w-full">
+              <img
+                src={displayUrl}
+                alt="Preview"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                    <span className="text-sm text-white font-medium">Uploading...</span>
+                  </div>
+                </div>
+              )}
+              {!isUploading && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2 z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveImage();
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div
+              className={`
+                flex items-center justify-center aspect-video w-full
+                ${dragActive ? 'bg-primary/5' : 'bg-muted'}
+                transition-colors
+              `}
+            >
+              {isUploading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <Upload className="h-8 w-8" />
+                  <p className="text-sm font-medium">{placeholder}</p>
+                  <p className="text-xs">PNG, JPG, GIF up to {maxSize}MB</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (variant === 'avatar') {
       return (
         <div className="flex items-center space-x-4">
           <Avatar className="h-20 w-20">
-            <AvatarImage src={value} alt="Preview" />
+            <AvatarImage src={displayUrl} alt="Preview" />
             <AvatarFallback>
               <ImageIcon className="h-8 w-8" />
             </AvatarFallback>
@@ -136,38 +220,51 @@ export function ImageUpload({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => !disabled && fileInputRef.current?.click()}
+        onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
       >
-        {value ? (
+        {hasImage ? (
           <div className="relative">
             <img
-              src={value}
+              src={displayUrl}
               alt="Preview"
               className="max-h-32 mx-auto rounded-lg object-cover"
             />
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="absolute -top-2 -right-2"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRemoveImage();
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            {isUploading && (
+              <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center z-10">
+                <div className="flex flex-col items-center gap-1">
+                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+                  <span className="text-xs text-white font-medium">Uploading...</span>
+                </div>
+              </div>
+            )}
+            {!isUploading && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="absolute -top-2 -right-2 z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemoveImage();
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
             {isUploading ? (
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                <span className="text-sm font-medium">Uploading...</span>
+              </div>
             ) : (
               <Upload className="h-8 w-8 mx-auto text-gray-400" />
             )}
             <div>
               <p className="text-sm font-medium">
-                {isUploading ? 'Uploading...' : 'Drop image here or click to upload'}
+                {placeholder}
               </p>
               <p className="text-xs text-gray-500">
                 PNG, JPG, GIF up to {maxSize}MB
@@ -182,9 +279,9 @@ export function ImageUpload({
   return (
     <div className={`space-y-2 ${className}`}>
       {label && <Label>{label}</Label>}
-      
-      {renderUploadArea()}
-      
+
+      {renderImagePreview()}
+
       <input
         ref={fileInputRef}
         type="file"

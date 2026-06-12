@@ -93,11 +93,13 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         }
       }
 
+      const { address, latitude, longitude, show_publicly, ...eventValues } = values
+
       const submitData = {
-        ...values,
+        ...eventValues,
+        venue: values.address || 'TBD',
         additional_info: additionalInfo,
         location_id: locationId,
-        // Convert date strings to ISO format
         event_date: values.event_date ? new Date(values.event_date).toISOString() : null,
         end_date: values.end_date ? new Date(values.end_date).toISOString() : null,
       }
@@ -393,7 +395,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
                   label="Event Image"
                   placeholder="Upload an event image or enter URL"
                   variant="card"
-                  maxSize={5}
+                  maxSize={20}
                 />
               </FormControl>
               <FormDescription>
