@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-      return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
+      return NextResponse.json({ error: 'File size must be less than 50MB' }, { status: 400 });
     }
 
     const folder = typeof folderValue === 'string' && folderValue.trim() ? folderValue.trim() : 'uploads';

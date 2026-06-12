@@ -16,10 +16,10 @@ export class ImageUploadService {
         throw new Error('File must be an image');
       }
 
-      // Validate file size (max 5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB
+      // Validate file size (max 50MB)
+      const maxSize = 50 * 1024 * 1024; // 50MB
       if (file.size > maxSize) {
-        throw new Error('File size must be less than 5MB');
+        throw new Error('File size must be less than 50MB');
       }
 
       const formData = new FormData();

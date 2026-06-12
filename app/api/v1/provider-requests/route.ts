@@ -56,7 +56,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const { place_id, notes } = await request.json();
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: 'Unable to read request body' }, { status: 400 });
+  }
+  if (!rawBody || !rawBody.trim()) {
+    return NextResponse.json({ error: 'Request body is empty. Send a valid JSON object.' }, { status: 400 });
+  }
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
+  const { place_id, notes } = body;
   if (!place_id) {
     return NextResponse.json({ error: 'place_id is required' }, { status: 400 });
   }
@@ -83,7 +98,21 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'request_id is required' }, { status: 400 });
   }
 
-  const updates = await request.json();
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: 'Unable to read request body' }, { status: 400 });
+  }
+  if (!rawBody || !rawBody.trim()) {
+    return NextResponse.json({ error: 'Request body is empty. Send a valid JSON object.' }, { status: 400 });
+  }
+  let updates: Record<string, unknown>;
+  try {
+    updates = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
   const { data, error } = await supabaseAdmin
     .from('provider_requests')
     .update(updates)

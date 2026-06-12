@@ -121,11 +121,11 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
       console.log("Services state:", services)
       console.log("Selected breeds state:", selectedBreeds)
       
-      // Use the current form values for the submission
+      // Use the current form values instead of validated values to ensure latest image_url
       const submissionValues = { ...currentValues }
       // Check name uniqueness
       const { isUnique, error: validationError } = await validateServiceProviderName(
-        values.name,
+        submissionValues.name,
         provider ? provider.service_provider_id : undefined
       );
 
@@ -142,47 +142,49 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
         return;
       }
 
-      let locationId = values.location_id
+      let locationId = submissionValues.location_id
 
       // Handle location creation or update
-      if (values.address) {
+      if (submissionValues.address) {
         if (provider && provider.location_id) {
           const locationData = await updateLocation(provider.location_id, {
-            address: values.address,
-            latitude: values.latitude || null,
-            longitude: values.longitude || null,
-            show_publicly: values.show_publicly,
+            address: submissionValues.address,
+            latitude: submissionValues.latitude || null,
+            longitude: submissionValues.longitude || null,
+            show_publicly: submissionValues.show_publicly,
           })
           locationId = provider.location_id
         } else {
           const locationData = await createLocation({
-            address: values.address,
-            latitude: values.latitude || null,
-            longitude: values.longitude || null,
-            show_publicly: values.show_publicly,
+            address: submissionValues.address,
+            latitude: submissionValues.latitude || null,
+            longitude: submissionValues.longitude || null,
+            show_publicly: submissionValues.show_publicly,
           })
           locationId = locationData.location_id
         }
       }
 
+      const profileImage = images.length > 0 ? images[0].image_url : (submissionValues.image_url || null)
+
       const providerData = {
-        service_category_id: values.service_category_id,
-        name: values.name,
-        description: values.description || null,
-        bio: values.bio || null,
-        image_url: values.image_url || null,
-        phone: values.phone || null,
-        emergency_number: values.emergency_number || null,
-        number_2: values.number_2 || null,
-        email: values.email || null,
-        website: values.website || null,
+        service_category_id: submissionValues.service_category_id,
+        name: submissionValues.name,
+        description: submissionValues.description || null,
+        bio: submissionValues.bio || null,
+        image_url: profileImage,
+        phone: submissionValues.phone || null,
+        emergency_number: submissionValues.emergency_number || null,
+        number_2: submissionValues.number_2 || null,
+        email: submissionValues.email || null,
+        website: submissionValues.website || null,
         location_id: locationId || null,
-        rating: values.rating,
-        total_reviews: values.total_reviews,
-        is_verified: values.is_verified,
-        is_active: values.is_active,
-        featured: values.featured,
-        operating_hours: values.operating_hours || null,
+        rating: submissionValues.rating,
+        total_reviews: submissionValues.total_reviews,
+        is_verified: submissionValues.is_verified,
+        is_active: submissionValues.is_active,
+        featured: submissionValues.featured,
+        operating_hours: submissionValues.operating_hours || null,
       }
 
       if (provider) {
@@ -258,8 +260,8 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
 
         const allImages: ServiceProviderImage[] = []
 
-        if (values.image_url && !images.some(img => img.image_url === values.image_url)) {
-          allImages.push({ image_url: values.image_url, order: 0 })
+        if (profileImage && !images.some(img => img.image_url === profileImage)) {
+          allImages.push({ image_url: profileImage, order: 0 })
         }
 
         images.forEach((img) => {
@@ -422,8 +424,6 @@ export function ServiceProviderForm({ provider, preselectedCategoryId, onSuccess
             <ImagesTab 
               serviceProviderId={provider?.service_provider_id}
               onImagesChange={setImages}
-              profileImageUrl={form.watch("image_url")}
-              onProfileImageChange={(url) => form.setValue("image_url", url)}
             />
           </TabsContent>
 

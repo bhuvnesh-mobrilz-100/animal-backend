@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Loader2, Image as ImageIcon, GripVertical, Plus } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Loader2, Image as ImageIcon, GripVertical, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { ImageUploadService } from '@/lib/image-upload';
@@ -44,7 +43,14 @@ interface MultipleImageUploadProps {
   className?: string;
   disabled?: boolean;
   maxImages?: number;
-  maxSize?: number; // in MB
+  maxSize?: number;
+}
+
+interface UploadingFile {
+  id: string;
+  name: string;
+  completed: boolean;
+  error?: string;
 }
 
 interface SortableImageItemProps {
@@ -70,6 +76,8 @@ function SortableImageItem({ image, index, onRemove, disabled }: SortableImageIt
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const [imgError, setImgError] = useState(false);
+
   return (
     <div
       ref={setNodeRef}
@@ -79,13 +87,19 @@ function SortableImageItem({ image, index, onRemove, disabled }: SortableImageIt
       <Card className="overflow-hidden">
         <CardContent className="p-2">
           <div className="relative">
-            <img
-              src={image.image_url}
-              alt={`Image ${index + 1}`}
-              className="w-full h-32 object-cover rounded-md"
-            />
-            
-            {/* Drag handle */}
+            {imgError ? (
+              <div className="w-full h-32 flex items-center justify-center bg-muted rounded-md">
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+            ) : (
+              <img
+                src={image.image_url}
+                alt={`Image ${index + 1}`}
+                className="w-full h-32 object-cover rounded-md"
+                onError={() => setImgError(true)}
+              />
+            )}
+
             <div
               {...attributes}
               {...listeners}
@@ -94,7 +108,6 @@ function SortableImageItem({ image, index, onRemove, disabled }: SortableImageIt
               <GripVertical className="h-4 w-4 text-white" />
             </div>
 
-            {/* Remove button */}
             <Button
               type="button"
               variant="destructive"
@@ -106,7 +119,6 @@ function SortableImageItem({ image, index, onRemove, disabled }: SortableImageIt
               <X className="h-3 w-3" />
             </Button>
 
-            {/* Order indicator */}
             <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
               {index + 1}
             </div>
@@ -114,6 +126,21 @@ function SortableImageItem({ image, index, onRemove, disabled }: SortableImageIt
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function UploadingPlaceholder({ name }: { name: string }) {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-2">
+        <div className="w-full h-32 flex flex-col items-center justify-center bg-muted rounded-md gap-2">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <p className="text-xs text-muted-foreground text-center px-2 truncate max-w-full">
+            {name}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -126,9 +153,9 @@ export function MultipleImageUpload({
   className = "",
   disabled = false,
   maxImages = 10,
-  maxSize = 5,
+  maxSize = 50,
 }: MultipleImageUploadProps) {
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,44 +170,77 @@ export function MultipleImageUpload({
     if (disabled) return;
 
     const fileArray = Array.from(files);
-    const remainingSlots = maxImages - value.length;
-    
+    const remainingSlots = maxImages - value.length - uploadingFiles.length;
+
     if (fileArray.length > remainingSlots) {
       toast.error(`You can only upload ${remainingSlots} more image(s)`);
       return;
     }
 
-    setIsUploading(true);
-    const newImages: ServiceProviderImage[] = [];
+    const uploads = fileArray.map((file) => ({
+      id: `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: file.name,
+      completed: false,
+    }));
+
+    setUploadingFiles((prev) => [...prev, ...uploads]);
+
+    const completedImages: ServiceProviderImage[] = [];
 
     try {
-      for (const file of fileArray) {
-        // Validate file size
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+
         if (file.size > maxSize * 1024 * 1024) {
-          throw new Error(`File ${file.name} is too large. Maximum size is ${maxSize}MB`);
+          const errorMsg = `${file.name} is too large. Maximum size is ${maxSize}MB`;
+          toast.error(errorMsg);
+          setUploadingFiles((prev) =>
+            prev.map((u) =>
+              u.id === uploads[i].id ? { ...u, error: errorMsg, completed: true } : u
+            )
+          );
+          continue;
         }
 
-        // Validate file type
         if (!file.type.startsWith('image/')) {
-          throw new Error(`File ${file.name} is not an image`);
+          const errorMsg = `${file.name} is not an image`;
+          toast.error(errorMsg);
+          setUploadingFiles((prev) =>
+            prev.map((u) =>
+              u.id === uploads[i].id ? { ...u, error: errorMsg, completed: true } : u
+            )
+          );
+          continue;
         }
 
-        const result = await ImageUploadService.uploadImage(file, folder);
-        newImages.push({
-          image_url: result.url,
-          order: value.length + newImages.length,
-          isNew: true,
-        });
+        try {
+          const result = await ImageUploadService.uploadImage(file, folder);
+          completedImages.push({
+            image_url: result.url,
+            order: value.length + completedImages.length,
+            isNew: true,
+          });
+          setUploadingFiles((prev) =>
+            prev.map((u) =>
+              u.id === uploads[i].id ? { ...u, completed: true } : u
+            )
+          );
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : `Failed to upload ${file.name}`;
+          toast.error(errorMsg);
+          setUploadingFiles((prev) =>
+            prev.map((u) =>
+              u.id === uploads[i].id ? { ...u, error: errorMsg, completed: true } : u
+            )
+          );
+        }
       }
 
-      onChange([...value, ...newImages]);
-      toast.success(`${newImages.length} image(s) uploaded successfully`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-      toast.error(errorMessage);
-      onError?.(errorMessage);
+      if (completedImages.length > 0) {
+        onChange([...value, ...completedImages]);
+      }
     } finally {
-      setIsUploading(false);
+      setUploadingFiles((prev) => prev.filter((u) => !u.completed || u.error));
     }
   };
 
@@ -189,12 +249,13 @@ export function MultipleImageUpload({
     if (files && files.length > 0) {
       handleFileUpload(files);
     }
+    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    
+
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       handleFileUpload(files);
@@ -213,7 +274,6 @@ export function MultipleImageUpload({
 
   const handleRemoveImage = (index: number) => {
     const newImages = value.filter((_, i) => i !== index);
-    // Reorder the remaining images
     const reorderedImages = newImages.map((img, i) => ({
       ...img,
       order: i,
@@ -229,7 +289,6 @@ export function MultipleImageUpload({
       const overIndex = parseInt(over?.id.toString().replace('image-', '') || '0');
 
       const newImages = arrayMove(value, activeIndex, overIndex);
-      // Update order values
       const reorderedImages = newImages.map((img, i) => ({
         ...img,
         order: i,
@@ -238,13 +297,14 @@ export function MultipleImageUpload({
     }
   };
 
-  const canAddMore = value.length < maxImages;
+  const totalSlots = value.length + uploadingFiles.length;
+  const canAddMore = totalSlots < maxImages;
+  const uploadingCount = uploadingFiles.length;
 
   return (
     <div className={`space-y-4 ${className}`}>
       {label && <Label className="text-base font-medium">{label}</Label>}
-      
-      {/* Upload Area */}
+
       {canAddMore && (
         <div
           className={`
@@ -258,17 +318,19 @@ export function MultipleImageUpload({
           onClick={() => !disabled && fileInputRef.current?.click()}
         >
           <div className="space-y-2">
-            {isUploading ? (
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            {uploadingCount > 0 ? (
+              <Upload className="h-8 w-8 mx-auto text-primary" />
             ) : (
               <Plus className="h-8 w-8 mx-auto text-gray-400" />
             )}
             <div>
               <p className="text-sm font-medium">
-                {isUploading ? 'Uploading...' : 'Drop images here or click to upload'}
+                {uploadingCount > 0
+                  ? `Uploading ${uploadingCount} file(s)...`
+                  : 'Drop images here or click to upload'}
               </p>
               <p className="text-xs text-gray-500">
-                PNG, JPG, GIF up to {maxSize}MB ({value.length}/{maxImages} images)
+                PNG, JPG, GIF up to {maxSize}MB ({totalSlots}/{maxImages} images)
               </p>
             </div>
           </div>
@@ -285,12 +347,13 @@ export function MultipleImageUpload({
         disabled={disabled}
       />
 
-      {/* Images Grid */}
-      {value.length > 0 && (
+      {(value.length > 0 || uploadingFiles.length > 0) && (
         <div className="space-y-2">
-          <Label className="text-sm text-gray-600">
-            Drag images to reorder them:
-          </Label>
+          {value.length > 0 && (
+            <Label className="text-sm text-gray-600">
+              Drag images to reorder them:
+            </Label>
+          )}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -310,13 +373,16 @@ export function MultipleImageUpload({
                     disabled={disabled}
                   />
                 ))}
+                {uploadingFiles.map((file) => (
+                  <UploadingPlaceholder key={file.id} name={file.name} />
+                ))}
               </div>
             </SortableContext>
           </DndContext>
         </div>
       )}
 
-      {value.length === 0 && (
+      {value.length === 0 && uploadingFiles.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No images uploaded yet</p>

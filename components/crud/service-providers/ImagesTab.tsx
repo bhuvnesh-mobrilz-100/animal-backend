@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { MultipleImageUpload, ServiceProviderImage } from "@/components/ui/multiple-image-upload"
 import { toast } from "sonner"
@@ -8,13 +8,11 @@ import { Loader2 } from "lucide-react"
 
 interface ImagesTabProps {
   serviceProviderId?: number
-  profileImageUrl?: string
   onImagesChange?: (images: ServiceProviderImage[]) => void
-  onProfileImageChange?: (url: string) => void
 }
 
-export function ImagesTab({ serviceProviderId, profileImageUrl, onImagesChange, onProfileImageChange }: ImagesTabProps) {
-  const [galleryImages, setGalleryImages] = useState<ServiceProviderImage[]>([])
+export function ImagesTab({ serviceProviderId, onImagesChange }: ImagesTabProps) {
+  const [allImages, setAllImages] = useState<ServiceProviderImage[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -42,7 +40,8 @@ export function ImagesTab({ serviceProviderId, profileImageUrl, onImagesChange, 
         order: img.order,
       }))
 
-      setGalleryImages(formattedImages)
+      setAllImages(formattedImages)
+      onImagesChange?.(formattedImages)
     } catch (error) {
       console.error("Error fetching images:", error)
       toast.error("Failed to load images")
@@ -51,32 +50,9 @@ export function ImagesTab({ serviceProviderId, profileImageUrl, onImagesChange, 
     }
   }
 
-  const allImages: ServiceProviderImage[] = useMemo(() => {
-    const combined: ServiceProviderImage[] = []
-
-    if (profileImageUrl && !galleryImages.some(img => img.image_url === profileImageUrl)) {
-      combined.push({ image_url: profileImageUrl, order: 0 })
-    }
-
-    galleryImages.forEach((img) => {
-      if (!combined.some(i => i.image_url === img.image_url)) {
-        combined.push({ ...img, order: combined.length })
-      }
-    })
-
-    return combined
-  }, [profileImageUrl, galleryImages])
-
   const handleImagesChange = (newImages: ServiceProviderImage[]) => {
-    const profileUrl = newImages.length > 0 ? newImages[0].image_url : ""
-    const galleryOnly = newImages.slice(1)
-
-    setGalleryImages(galleryOnly)
-    onImagesChange?.(galleryOnly)
-
-    if (profileUrl !== profileImageUrl) {
-      onProfileImageChange?.(profileUrl)
-    }
+    setAllImages(newImages)
+    onImagesChange?.(newImages)
   }
 
   if (loading) {
@@ -103,7 +79,7 @@ export function ImagesTab({ serviceProviderId, profileImageUrl, onImagesChange, 
         folder="service-providers"
         label="Images"
         maxImages={10}
-        maxSize={5}
+        maxSize={50}
       />
 
       {!serviceProviderId && allImages.length > 0 && (

@@ -66,6 +66,7 @@ export function ServiceProviderWizard({ preselectedCategoryId }: ServiceProvider
       latitude: "",
       longitude: "",
       show_publicly: true,
+      operating_hours: undefined,
     },
   })
 
@@ -147,35 +148,40 @@ export function ServiceProviderWizard({ preselectedCategoryId }: ServiceProvider
   const onSubmit = async (values: any) => {
     setIsLoading(true)
     try {
-      let locationId = values.location_id
+      const currentFormValues = form.getValues()
+      const submissionValues = { ...currentFormValues }
+
+      let locationId = submissionValues.location_id
 
       // Create location if address is provided and no location is selected
-      if (values.address && !locationId) {
+      if (submissionValues.address && !locationId) {
         const locationData = await createLocation({
-          address: values.address,
-          latitude: values.latitude || null,
-          longitude: values.longitude || null,
-          show_publicly: values.show_publicly,
+          address: submissionValues.address,
+          latitude: submissionValues.latitude || null,
+          longitude: submissionValues.longitude || null,
+          show_publicly: submissionValues.show_publicly,
         })
         locationId = locationData.location_id
       }
 
+      const profileImage = images.length > 0 ? images[0].image_url : (submissionValues.image_url || null)
+
       const providerData = {
-        service_category_id: values.service_category_id,
-        name: values.name,
-        description: values.description || null,
-        bio: values.bio || null,
-        image_url: values.image_url || null,
-        phone: values.phone || null,
-        emergency_number: values.emergency_number || null,
-        number_2: values.number_2 || null,
-        email: values.email || null,
-        website: values.website || null,
+        service_category_id: submissionValues.service_category_id,
+        name: submissionValues.name,
+        description: submissionValues.description || null,
+        bio: submissionValues.bio || null,
+        image_url: profileImage,
+        phone: submissionValues.phone || null,
+        emergency_number: submissionValues.emergency_number || null,
+        number_2: submissionValues.number_2 || null,
+        email: submissionValues.email || null,
+        website: submissionValues.website || null,
         location_id: locationId || null,
-        is_verified: values.is_verified,
-        is_active: values.is_active,
-        featured: values.featured,
-        operating_hours: values.operating_hours || null,
+        is_verified: submissionValues.is_verified,
+        is_active: submissionValues.is_active,
+        featured: submissionValues.featured,
+        operating_hours: submissionValues.operating_hours || null,
       }
 
       const { data: providerResult, error } = await supabase
@@ -231,8 +237,8 @@ export function ServiceProviderWizard({ preselectedCategoryId }: ServiceProvider
       // Save images if any (includes profile image as first)
       const allImages: ServiceProviderImage[] = []
 
-      if (values.image_url && !images.some(img => img.image_url === values.image_url)) {
-        allImages.push({ image_url: values.image_url, order: 0 })
+      if (profileImage && !images.some(img => img.image_url === profileImage)) {
+        allImages.push({ image_url: profileImage, order: 0 })
       }
 
       images.forEach((img) => {
@@ -282,8 +288,6 @@ export function ServiceProviderWizard({ preselectedCategoryId }: ServiceProvider
         <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
           <ImagesTab 
             onImagesChange={setImages}
-            profileImageUrl={form.watch("image_url")}
-            onProfileImageChange={(url) => form.setValue("image_url", url)}
           />
         </div>
         <div style={{ display: currentStep === 3 ? 'block' : 'none' }}>

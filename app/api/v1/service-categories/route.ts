@@ -22,7 +22,22 @@ export async function POST(request: NextRequest) {
   const auth = await requireRoles(request, ['Admin', 'Owner', 'Manager']);
   if ('status' in auth) return auth;
 
-  const { name, description } = await request.json();
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: 'Unable to read request body' }, { status: 400 });
+  }
+  if (!rawBody || !rawBody.trim()) {
+    return NextResponse.json({ error: 'Request body is empty. Send a valid JSON object.' }, { status: 400 });
+  }
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
+  const { name, description } = body;
   if (!name) {
     return NextResponse.json({ error: 'Category name is required' }, { status: 400 });
   }
@@ -49,7 +64,21 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'service_category_id is required' }, { status: 400 });
   }
 
-  const updates = await request.json();
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: 'Unable to read request body' }, { status: 400 });
+  }
+  if (!rawBody || !rawBody.trim()) {
+    return NextResponse.json({ error: 'Request body is empty. Send a valid JSON object.' }, { status: 400 });
+  }
+  let updates: Record<string, unknown>;
+  try {
+    updates = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
   const { data, error } = await supabaseAdmin
     .from('service_categories')
     .update(updates)

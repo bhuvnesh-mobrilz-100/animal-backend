@@ -29,8 +29,16 @@ export async function ensureAnimalImageBucketExists() {
     throw new Error(`Unable to inspect storage buckets: ${listError.message}`);
   }
 
-  const bucketExists = buckets?.some((bucket) => bucket.name === ANIMAL_IMAGE_BUCKET);
-  if (bucketExists) {
+  const existingBucket = buckets?.find((bucket) => bucket.name === ANIMAL_IMAGE_BUCKET);
+  if (existingBucket) {
+    if (!existingBucket.public) {
+      const { error: updateError } = await supabaseAdmin.storage.updateBucket(ANIMAL_IMAGE_BUCKET, {
+        public: true,
+      });
+      if (updateError) {
+        console.warn('Failed to update bucket to public:', updateError.message);
+      }
+    }
     return;
   }
 
@@ -61,9 +69,14 @@ export async function uploadAnimalImage(file: File, folder = 'uploads') {
   }
 
   const { data: publicUrlData } = supabaseAdmin.storage.from(ANIMAL_IMAGE_BUCKET).getPublicUrl(path);
+  const publicUrl = publicUrlData?.publicUrl;
+
+  if (!publicUrl) {
+    throw new Error('Failed to generate public URL for uploaded image');
+  }
 
   return {
-    url: publicUrlData.publicUrl,
+    url: publicUrl,
     path,
   };
 }
