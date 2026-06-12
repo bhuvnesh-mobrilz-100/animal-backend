@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from('users')
-    .select('user_id, email, name, surname, phone, subscription_status, subscription_plan, subscription_expires_at, static_location, preferred_radius, notification_preferences, user_type')
+    .select('user_id, email, name, surname, phone, profile_image_url, subscription_status, subscription_plan, subscription_expires_at, static_location, preferred_radius, notification_preferences, user_type')
     .eq('user_id', user.internalUserId)
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from('users')
-    .select('user_id, email, name, surname, phone, subscription_status, subscription_plan, subscription_expires_at, static_location, preferred_radius, notification_preferences, user_type')
+    .select('user_id, email, name, surname, phone, profile_image_url, subscription_status, subscription_plan, subscription_expires_at, static_location, preferred_radius, notification_preferences, user_type')
     .order('created_at', { ascending: false });
 
   if (error) {

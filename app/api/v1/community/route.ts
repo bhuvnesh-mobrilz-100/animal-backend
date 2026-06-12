@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabaseAdmin
     .from('community_posts')
-    .select('*, post_likes(reaction), community_comments(user_id,comment,created_at,updated_at,users ( name ) )')
+    .select('*, post_likes(reaction), community_comments(user_id,comment,created_at,updated_at,users ( name )), users!user_id ( profile_image_url,user_name )')
     .order('created_at', { ascending: false });
 
   if (search) {

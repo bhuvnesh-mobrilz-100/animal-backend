@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/server-supabase';
 import { buildAuthProfile, PUBLIC_SIGNUP_ROLE_NAMES } from '@/lib/auth-profile';
 import { setCurrentTokenHashes } from '@/lib/auth-session';
+import { uploadAnimalImage } from '@/lib/storage-upload';
 
 // ----------------------------------------------------------------------
 // Geocoding helper using Google Maps Geocoding API
@@ -81,7 +82,13 @@ export async function POST(request: NextRequest) {
       confirm_password = formData.get('confirm_password')?.toString() || '';
       full_name = formData.get('full_name')?.toString() || '';
       location = formData.get('location')?.toString() || undefined;
-      profile_image_url = formData.get('profile_image_url')?.toString() || undefined;
+      const profileImageField = formData.get('profile_image_url');
+      if (profileImageField instanceof File) {
+        const { url } = await uploadAnimalImage(profileImageField, 'avatars');
+        profile_image_url = url;
+      } else {
+        profile_image_url = profileImageField?.toString() || undefined;
+      }
       roleName = formData.get('roleName')?.toString() || 'Guest';
     }
 

@@ -28,7 +28,7 @@ export type AuthProfile = {
   name: string | null;
   email: string | null;
   phone: string | null;
-  avatar_url: string | null;
+  profile_image_url: string | null;
   is_verified: boolean;
   subscription_status: string | null;
   user_type: string | null;
@@ -61,7 +61,7 @@ async function loadInternalUser(authUser: AuthUserInput) {
     name,
     email,
     phone,
-    avatar_url:profile_image_url,
+    profile_image_url:profile_image_url,
     subscription_status,
     user_type,
     created_at,
@@ -204,7 +204,7 @@ export async function buildAuthProfile(authUser: AuthUserInput) {
     name: fallbackDisplayName,
     email: authUser.email,
     phone: null,
-    avatar_url: null,
+    profile_image_url: null,
     is_verified: true,
     subscription_status: null,
     user_type: authUser.roleNames?.[0] || null,
