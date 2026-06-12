@@ -4,6 +4,33 @@ import { requireRoles } from '@/lib/server-auth';
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search');
+  const categoryId = request.nextUrl.searchParams.get('service_category_id');
+
+  if (categoryId) {
+    const { data: category, error } = await supabaseAdmin
+      .from('service_categories')
+      .select('*')
+      .eq('service_category_id', Number(categoryId))
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!category) {
+      return NextResponse.json({ error: 'Service category not found' }, { status: 404 });
+    }
+
+    const { data: providers } = await supabaseAdmin
+      .from('service_providers')
+      .select('*, service_categories(*), service_provider_images(*), services(*)')
+      .eq('service_category_id', Number(categoryId))
+      .eq('is_deleted', false)
+      .order('name');
+
+    return NextResponse.json({ category: { ...category, service_providers: providers || [] } });
+  }
+
   let query = supabaseAdmin.from('service_categories').select('*').order('name');
 
   if (search) {

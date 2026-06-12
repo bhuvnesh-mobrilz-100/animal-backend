@@ -18,20 +18,11 @@ export async function GET(
       location:locations(*),
       service_category:service_categories(*),
       service_provider_images(*),
-      services(*),
-      service_provider_breeds(
-        id,
-        breed_id,
-        breed:breeds(
-          *,
-          animal_type:animal_types(*)
-        )
-      ),
-      tags:service_provider_tags(*)
+      services(*)
     `)
     .eq('service_provider_id', id)
     .eq('is_deleted', false)
-    .single();
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
