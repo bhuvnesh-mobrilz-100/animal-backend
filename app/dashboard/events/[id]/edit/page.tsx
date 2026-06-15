@@ -31,6 +31,7 @@ export default function EditEventPage({ params }: EditEventPageProps) {
         .from("events")
         .select(`
           *,
+          location:locations(*),
           service_provider:service_providers(
             name,
             service_provider_id

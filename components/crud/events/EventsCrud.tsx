@@ -54,6 +54,7 @@ export function EventsCrud() {
     searchParams.get('event_category') ? parseInt(searchParams.get('event_category')!) : undefined
   )
   const [showActiveOnly, setShowActiveOnly] = useState(searchParams.get('active_only') === 'true')
+  const [eventType, setEventType] = useState<string>(searchParams.get('type') || '')
 
   // Update URL with search params
   const updateURL = () => {
@@ -62,6 +63,7 @@ export function EventsCrud() {
     if (selectedServiceProvider) params.set('service_provider', selectedServiceProvider.toString())
     if (selectedEventCategory) params.set('event_category', selectedEventCategory.toString())
     if (showActiveOnly) params.set('active_only', 'true')
+    if (eventType) params.set('type', eventType)
     
     const newURL = params.toString() ? `?${params.toString()}` : ''
     router.replace(`/dashboard/events${newURL}`, { scroll: false })
@@ -75,15 +77,19 @@ export function EventsCrud() {
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, selectedServiceProvider, selectedEventCategory, showActiveOnly])
+  }, [searchTerm, selectedServiceProvider, selectedEventCategory, showActiveOnly, eventType])
 
   const fetchEvents = async () => {
     setLoading(true)
     try {
+      const now = new Date()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+
       let query = supabase
         .from("events")
         .select(`
           *,
+          location:locations(*),
           service_provider:service_providers(
             name,
             service_provider_id
@@ -95,9 +101,15 @@ export function EventsCrud() {
             color
           )
         `)
-        .order("event_date", { ascending: false })
+        .order("created_at", { ascending: false })
 
       // Apply filters
+      if (eventType === 'upcoming') {
+        query = query.gte("event_date", todayStart)
+      } else if (eventType === 'past') {
+        query = query.lt("event_date", todayStart)
+      }
+
       if (showActiveOnly) {
         query = query.eq("is_active", true)
       }
@@ -135,9 +147,10 @@ export function EventsCrud() {
     setSelectedServiceProvider(undefined)
     setSelectedEventCategory(undefined)
     setShowActiveOnly(false)
+    setEventType('')
   }
 
-  const hasActiveFilters = searchTerm || selectedServiceProvider || selectedEventCategory || showActiveOnly
+  const hasActiveFilters = searchTerm || selectedServiceProvider || selectedEventCategory || showActiveOnly || eventType
 
   const handleEditEvent = (event: Event) => {
     router.push(`/dashboard/events/${event.event_id}/edit`)
@@ -283,6 +296,18 @@ export function EventsCrud() {
             />
           </div>
           
+          <div>
+            <label className="text-sm font-medium mb-2 block">Event Type</label>
+            <select
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">All events</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+          </div>
           <div className="flex items-end">
             <div className="flex items-center space-x-2">
               <input

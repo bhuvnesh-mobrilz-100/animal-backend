@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { supabase } from "@/lib/supabase"
@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Package } from "lucide-react"
 import { format } from "date-fns"
 
 interface EventFormProps {
@@ -44,6 +44,8 @@ interface EventFormProps {
 export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [additionalInfo, setAdditionalInfo] = useState(event?.additional_info || null)
+  const [providerServices, setProviderServices] = useState<any[]>([])
+  const [loadingServices, setLoadingServices] = useState(false)
 
   const form = useForm({
     resolver: zodResolver(eventSchema),
@@ -68,27 +70,56 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     },
   })
 
+  const selectedProviderId = form.watch('service_provider_id')
+
+  useEffect(() => {
+    if (!selectedProviderId) {
+      setProviderServices([])
+      return
+    }
+
+    const fetchServices = async () => {
+      setLoadingServices(true)
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('service_id, name, description, price, duration_minutes')
+          .eq('service_provider_id', selectedProviderId)
+          .eq('is_active', true)
+          .order('name')
+
+        if (error) throw error
+        setProviderServices(data || [])
+      } catch (error) {
+        console.error('Error fetching services:', error)
+        setProviderServices([])
+      } finally {
+        setLoadingServices(false)
+      }
+    }
+
+    fetchServices()
+  }, [selectedProviderId])
+
   const onSubmit = async (values: any) => {
     setIsLoading(true)
     try {
       let locationId = values.location_id
 
-      if (values.address) {
+      // Always store location if address or lat/lng provided
+      if (values.address || values.latitude || values.longitude) {
+        const locInput = {
+          address: values.address || values.venue || 'TBD',
+          latitude: values.latitude || null,
+          longitude: values.longitude || null,
+          show_publicly: values.show_publicly,
+        }
+
         if (values.location_id) {
-          await updateLocation(values.location_id, {
-            address: values.address,
-            latitude: values.latitude,
-            longitude: values.longitude,
-            show_publicly: values.show_publicly,
-          })
+          await updateLocation(values.location_id, locInput)
           locationId = values.location_id
         } else {
-          const locationData = await createLocation({
-            address: values.address,
-            latitude: values.latitude,
-            longitude: values.longitude,
-            show_publicly: values.show_publicly,
-          })
+          const locationData = await createLocation(locInput)
           locationId = locationData.location_id
         }
       }
@@ -97,7 +128,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
 
       const submitData = {
         ...eventValues,
-        venue: values.address || 'TBD',
+        venue: values.address || values.venue || 'TBD',
         additional_info: additionalInfo,
         location_id: locationId,
         event_date: values.event_date ? new Date(values.event_date).toISOString() : null,
@@ -105,7 +136,6 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       }
 
       if (event) {
-        // Update existing event
         const { error } = await supabase
           .from("events")
           .update(submitData)
@@ -114,7 +144,6 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         if (error) throw error
         toast.success("Event updated successfully")
       } else {
-        // Create new event
         const { error } = await supabase
           .from("events")
           .insert([submitData])
@@ -263,6 +292,51 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
           )}
         />
 
+        {selectedProviderId && (
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium">Services from this provider</h3>
+            </div>
+            {loadingServices ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading services...
+              </div>
+            ) : providerServices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No services available from this provider.</p>
+            ) : (
+              <div className="grid gap-2">
+                {providerServices.map((service) => (
+                  <div
+                    key={service.service_id}
+                    className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <span className="font-medium">{service.name}</span>
+                      {service.description && (
+                        <p className="text-xs text-muted-foreground truncate max-w-[300px]">
+                          {service.description}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {service.duration_minutes && (
+                        <span>{service.duration_minutes} min</span>
+                      )}
+                      {service.price != null && (
+                        <span className="font-medium text-foreground">
+                          R{Number(service.price).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <FormField
           control={form.control}
           name="description"
@@ -386,7 +460,6 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
           name="image_url"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Event Image</FormLabel>
               <FormControl>
                 <ImageUpload
                   value={field.value}

@@ -8,26 +8,65 @@ export async function GET(request: NextRequest) {
   const approvedOnly = request.nextUrl.searchParams.get('approved_only') === 'true';
   const activeOnly = request.nextUrl.searchParams.get('active_only') === 'true';
 
-  let query = supabaseAdmin
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+  const selectStr = `
+    *,
+    location:locations(*),
+    service_provider:service_providers(
+      name,
+      service_provider_id
+    ),
+    event_category:event_categories(
+      name,
+      event_category_id,
+      icon,
+      color
+    )
+  `;
+
+  let upcomingQuery = supabaseAdmin
     .from('events')
-    .select('*')
-    .order('event_date', { ascending: false });
+    .select(selectStr)
+    .gte('event_date', todayStart)
+    .order('created_at', { ascending: false });
+
+  let pastQuery = supabaseAdmin
+    .from('events')
+    .select(selectStr)
+    .lt('event_date', todayStart)
+    .order('created_at', { ascending: false });
 
   if (search) {
-    query = query.ilike('title', `%${search}%`);
+    upcomingQuery = upcomingQuery.ilike('title', `%${search}%`);
+    pastQuery = pastQuery.ilike('title', `%${search}%`);
   }
   if (approvedOnly) {
-    query = query.eq('is_approved', true);
+    upcomingQuery = upcomingQuery.eq('is_approved', true);
+    pastQuery = pastQuery.eq('is_approved', true);
   }
   if (activeOnly) {
-    query = query.eq('is_active', true);
+    upcomingQuery = upcomingQuery.eq('is_active', true);
+    pastQuery = pastQuery.eq('is_active', true);
   }
 
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const [upcomingRes, pastRes] = await Promise.all([
+    upcomingQuery,
+    pastQuery,
+  ]);
+
+  if (upcomingRes.error) {
+    return NextResponse.json({ error: upcomingRes.error.message }, { status: 500 });
   }
-  return NextResponse.json({ events: data });
+  if (pastRes.error) {
+    return NextResponse.json({ error: pastRes.error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    upcoming: upcomingRes.data,
+    past: pastRes.data,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -39,11 +78,20 @@ export async function POST(request: NextRequest) {
   let title: string | undefined;
   let description: string | undefined;
   let event_date: string | undefined;
+  let end_date: string | undefined;
   let venue: string | undefined;
-  let location: string | undefined;
+  let address: string | undefined;
+  let latitude: string | undefined;
+  let longitude: string | undefined;
+  let show_publicly: boolean = true;
   let expiry: string | undefined;
   let event_category_id: number | undefined;
+  let service_provider_id: number | undefined;
   let image_url: string | undefined;
+  let price: number | undefined;
+  let max_attendees: number | undefined;
+  let current_attendees: number = 0;
+  let additional_info: any = null;
 
   const contentType = request.headers.get('content-type') || '';
 
@@ -53,12 +101,28 @@ export async function POST(request: NextRequest) {
     title = formData.get('title') as string | undefined;
     description = formData.get('description') as string | undefined;
     event_date = formData.get('event_date') as string | undefined;
+    end_date = formData.get('end_date') as string | undefined;
     venue = formData.get('venue') as string | undefined;
-    location = formData.get('location') as string | undefined;
+    address = formData.get('address') as string | undefined;
+    latitude = formData.get('latitude') as string | undefined;
+    longitude = formData.get('longitude') as string | undefined;
+    show_publicly = formData.get('show_publicly') === 'true';
     expiry = formData.get('expiry') as string | undefined;
     const categoryId = formData.get('event_category_id');
     event_category_id = categoryId ? Number(categoryId) : undefined;
+    const providerId = formData.get('service_provider_id');
+    service_provider_id = providerId ? Number(providerId) : undefined;
     image_url = formData.get('image_url') as string | undefined;
+    const priceVal = formData.get('price');
+    price = priceVal ? Number(priceVal) : undefined;
+    const maxAtt = formData.get('max_attendees');
+    max_attendees = maxAtt ? Number(maxAtt) : undefined;
+    const curAtt = formData.get('current_attendees');
+    current_attendees = curAtt ? Number(curAtt) : 0;
+    const addInfo = formData.get('additional_info');
+    if (addInfo) {
+      try { additional_info = JSON.parse(addInfo as string); } catch { additional_info = addInfo; }
+    }
 
     const file = formData.get('file');
     if (file instanceof File && file.size > 0) {
@@ -77,15 +141,44 @@ export async function POST(request: NextRequest) {
     title = body.title;
     description = body.description;
     event_date = body.event_date;
+    end_date = body.end_date;
     venue = body.venue;
-    location = body.location;
+    address = body.address;
+    latitude = body.latitude;
+    longitude = body.longitude;
+    show_publicly = body.show_publicly ?? true;
     expiry = body.expiry;
     event_category_id = body.event_category_id;
+    service_provider_id = body.service_provider_id;
     image_url = body.image_url;
+    price = body.price;
+    max_attendees = body.max_attendees;
+    current_attendees = body.current_attendees ?? 0;
+    additional_info = body.additional_info || null;
   }
 
   if (!title || !event_date || !venue) {
     return NextResponse.json({ error: 'Title, event date, and venue are required' }, { status: 400 });
+  }
+
+  // Create or use location with lat/lng
+  let location_id: number | null = null;
+  const locationAddress = address || venue;
+  if (locationAddress && (latitude || longitude)) {
+    const { data: locData, error: locError } = await supabaseAdmin
+      .from('locations')
+      .insert([{
+        address: locationAddress,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        show_publicly,
+      }])
+      .select()
+      .single();
+
+    if (!locError && locData) {
+      location_id = locData.location_id;
+    }
   }
 
   const { data, error } = await supabaseAdmin
@@ -95,17 +188,36 @@ export async function POST(request: NextRequest) {
         title,
         description,
         event_date,
+        end_date,
         venue,
-        location,
         expiry,
         image_url,
         is_active: true,
         is_approved: false,
         user_id: user.internalUserId,
         event_category_id,
+        service_provider_id,
+        location_id,
+        price,
+        max_attendees,
+        current_attendees,
+        additional_info,
       },
     ])
-    .select()
+    .select(`
+      *,
+      location:locations(*),
+      service_provider:service_providers(
+        name,
+        service_provider_id
+      ),
+      event_category:event_categories(
+        name,
+        event_category_id,
+        icon,
+        color
+      )
+    `)
     .single();
 
   if (error) {
@@ -124,12 +236,63 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'event_id is required' }, { status: 400 });
   }
 
-  const updates = await request.json();
+  const body = await request.json();
+  const { address, latitude, longitude, show_publicly, ...eventUpdates } = body;
+
+  // Update location if address/lat/lng provided
+  if (address || latitude || longitude) {
+    const { data: existing } = await supabaseAdmin
+      .from('events')
+      .select('location_id')
+      .eq('event_id', eventId)
+      .single();
+
+    if (existing?.location_id) {
+      await supabaseAdmin
+        .from('locations')
+        .update({
+          address: address || undefined,
+          latitude: latitude || null,
+          longitude: longitude || null,
+          show_publicly: show_publicly ?? true,
+        })
+        .eq('location_id', existing.location_id);
+    } else if (address && (latitude || longitude)) {
+      const { data: locData } = await supabaseAdmin
+        .from('locations')
+        .insert([{
+          address,
+          latitude: latitude || null,
+          longitude: longitude || null,
+          show_publicly: show_publicly ?? true,
+        }])
+        .select()
+        .single();
+
+      if (locData) {
+        eventUpdates.location_id = locData.location_id;
+      }
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from('events')
-    .update(updates)
+    .update(eventUpdates)
     .eq('event_id', eventId)
-    .select()
+    .select(`
+      *,
+      location:locations(*),
+      service_provider:service_providers(
+        name,
+        service_provider_id
+      ),
+      event_category:event_categories(
+        name,
+        event_category_id,
+        icon,
+        color
+      )
+    `)
     .single();
 
   if (error) {
