@@ -161,6 +161,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Title, event date, and venue are required' }, { status: 400 });
   }
 
+  if (title) {
+    const { data: existingEvent } = await supabaseAdmin
+      .from('events')
+      .select('event_id')
+      .eq('title', title)
+      .maybeSingle();
+    if (existingEvent) {
+      return NextResponse.json({ error: 'An event with this title already exists' }, { status: 409 });
+    }
+  }
+
   // Find or create location by address
   let location_id: number | null = null;
   const locationAddress = address || venue;
@@ -258,6 +269,18 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json();
   const { address, latitude, longitude, show_publicly, ...eventUpdates } = body;
+
+  if (eventUpdates.title) {
+    const { data: existingEvent } = await supabaseAdmin
+      .from('events')
+      .select('event_id')
+      .eq('title', eventUpdates.title)
+      .neq('event_id', eventId)
+      .maybeSingle();
+    if (existingEvent) {
+      return NextResponse.json({ error: 'An event with this title already exists' }, { status: 409 });
+    }
+  }
 
   // Find or update location by address
   if (address || latitude || longitude) {

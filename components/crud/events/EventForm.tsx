@@ -104,6 +104,32 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
   const onSubmit = async (values: any) => {
     setIsLoading(true)
     try {
+      // Check for duplicate title
+      if (!event) {
+        const { data: existing } = await supabase
+          .from('events')
+          .select('event_id')
+          .eq('title', values.title)
+          .maybeSingle()
+        if (existing) {
+          toast.error('An event with this title already exists')
+          setIsLoading(false)
+          return
+        }
+      } else if (values.title !== event.title) {
+        const { data: existing } = await supabase
+          .from('events')
+          .select('event_id')
+          .eq('title', values.title)
+          .neq('event_id', event.event_id)
+          .maybeSingle()
+        if (existing) {
+          toast.error('An event with this title already exists')
+          setIsLoading(false)
+          return
+        }
+      }
+
       let locationId = values.location_id
 
       if (values.address || values.latitude || values.longitude) {
