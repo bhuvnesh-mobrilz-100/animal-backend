@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { supabase } from "@/lib/supabase"
-import { createLocation, updateLocation } from "@/lib/locations-api"
+import { upsertLocation } from "@/lib/locations-api"
 import { eventSchema, Event } from "./schema"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,22 +106,14 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     try {
       let locationId = values.location_id
 
-      // Always store location if address or lat/lng provided
       if (values.address || values.latitude || values.longitude) {
-        const locInput = {
+        const locationData = await upsertLocation({
           address: values.address || values.venue || 'TBD',
           latitude: values.latitude || null,
           longitude: values.longitude || null,
           show_publicly: values.show_publicly,
-        }
-
-        if (values.location_id) {
-          await updateLocation(values.location_id, locInput)
-          locationId = values.location_id
-        } else {
-          const locationData = await createLocation(locInput)
-          locationId = locationData.location_id
-        }
+        })
+        locationId = locationData.location_id
       }
 
       const { address, latitude, longitude, show_publicly, ...eventValues } = values

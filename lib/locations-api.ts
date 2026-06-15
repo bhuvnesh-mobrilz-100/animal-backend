@@ -62,3 +62,36 @@ export async function deleteLocation(locationId: number): Promise<void> {
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || "Failed to delete location")
 }
+
+export async function upsertLocation(input: LocationInput): Promise<LocationRecord> {
+  const { data: existing } = await supabase
+    .from('locations')
+    .select('*')
+    .eq('address', input.address)
+    .maybeSingle()
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('locations')
+      .update({
+        latitude: input.latitude ?? existing.latitude,
+        longitude: input.longitude ?? existing.longitude,
+        show_publicly: input.show_publicly ?? existing.show_publicly,
+      })
+      .eq('location_id', existing.location_id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  }
+
+  const { data, error } = await supabase
+    .from('locations')
+    .insert([input])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}

@@ -161,23 +161,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Title, event date, and venue are required' }, { status: 400 });
   }
 
-  // Create or use location with lat/lng
+  // Find or create location by address
   let location_id: number | null = null;
   const locationAddress = address || venue;
-  if (locationAddress && (latitude || longitude)) {
-    const { data: locData, error: locError } = await supabaseAdmin
+  if (locationAddress) {
+    const { data: existing } = await supabaseAdmin
       .from('locations')
-      .insert([{
-        address: locationAddress,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        show_publicly,
-      }])
-      .select()
-      .single();
+      .select('*')
+      .eq('address', locationAddress)
+      .maybeSingle();
 
-    if (!locError && locData) {
-      location_id = locData.location_id;
+    if (existing) {
+      location_id = existing.location_id;
+      if (latitude || longitude || show_publicly !== undefined) {
+        await supabaseAdmin
+          .from('locations')
+          .update({
+            latitude: latitude ?? existing.latitude,
+            longitude: longitude ?? existing.longitude,
+            show_publicly: show_publicly ?? existing.show_publicly,
+          })
+          .eq('location_id', existing.location_id);
+      }
+    } else if (latitude || longitude) {
+      const { data: locData, error: locError } = await supabaseAdmin
+        .from('locations')
+        .insert([{
+          address: locationAddress,
+          latitude: latitude || null,
+          longitude: longitude || null,
+          show_publicly,
+        }])
+        .select()
+        .single();
+
+      if (!locError && locData) {
+        location_id = locData.location_id;
+      }
     }
   }
 
@@ -239,24 +259,25 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json();
   const { address, latitude, longitude, show_publicly, ...eventUpdates } = body;
 
-  // Update location if address/lat/lng provided
+  // Find or update location by address
   if (address || latitude || longitude) {
-    const { data: existing } = await supabaseAdmin
-      .from('events')
-      .select('location_id')
-      .eq('event_id', eventId)
-      .single();
+    const locationAddress = address || eventUpdates.venue || 'TBD';
+    const { data: existingLoc } = await supabaseAdmin
+      .from('locations')
+      .select('*')
+      .eq('address', locationAddress)
+      .maybeSingle();
 
-    if (existing?.location_id) {
+    if (existingLoc) {
       await supabaseAdmin
         .from('locations')
         .update({
-          address: address || undefined,
-          latitude: latitude || null,
-          longitude: longitude || null,
-          show_publicly: show_publicly ?? true,
+          latitude: latitude ?? existingLoc.latitude,
+          longitude: longitude ?? existingLoc.longitude,
+          show_publicly: show_publicly ?? existingLoc.show_publicly,
         })
-        .eq('location_id', existing.location_id);
+        .eq('location_id', existingLoc.location_id);
+      eventUpdates.location_id = existingLoc.location_id;
     } else if (address && (latitude || longitude)) {
       const { data: locData } = await supabaseAdmin
         .from('locations')
