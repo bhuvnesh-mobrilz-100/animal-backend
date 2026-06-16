@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/server-supabase';
 import { requireRoles } from '@/lib/server-auth';
+import { uploadAnimalImage } from '@/lib/storage-upload';
 
 export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('search');
@@ -50,8 +51,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     body = {};
     Array.from(formData.entries()).forEach(([key, value]) => {
-      if (typeof value === 'object') return;
-      body[key] = parseFormValue(value);
+      body[key] = value;
     });
   } else {
     body = await request.json();
@@ -78,6 +78,17 @@ export async function POST(request: NextRequest) {
 
   if (!name) {
     return NextResponse.json({ error: 'Place name is required' }, { status: 400 });
+  }
+
+  // Upload image file if provided
+  let finalImageUrl = image_url;
+  if (typeof image_url === 'object' && image_url instanceof File) {
+    try {
+      const { url } = await uploadAnimalImage(image_url, 'pet-friendly-places');
+      finalImageUrl = url;
+    } catch (uploadError: any) {
+      return NextResponse.json({ error: uploadError?.message || 'Image upload failed' }, { status: 500 });
+    }
   }
 
   // Coerce types that might come as strings from form-data
@@ -125,7 +136,7 @@ export async function POST(request: NextRequest) {
   const insertData: any = {
     name,
     description: description || null,
-    image_url: image_url || null,
+    image_url: finalImageUrl || null,
     phone: phone || null,
     email: email || null,
     website: website || null,
@@ -172,8 +183,7 @@ export async function PATCH(request: NextRequest) {
     const formData = await request.formData();
     body = {};
     Array.from(formData.entries()).forEach(([key, value]) => {
-      if (typeof value === 'object') return;
-      body[key] = parseFormValue(value);
+      body[key] = value;
     });
   } else {
     body = await request.json();
@@ -197,10 +207,20 @@ export async function PATCH(request: NextRequest) {
     show_publicly,
   } = body;
 
+  // Upload image file if provided
+  if (typeof image_url === 'object' && image_url instanceof File) {
+    try {
+      const { url } = await uploadAnimalImage(image_url, 'pet-friendly-places');
+      body.image_url = url;
+    } catch (uploadError: any) {
+      return NextResponse.json({ error: uploadError?.message || 'Image upload failed' }, { status: 500 });
+    }
+  }
+
   const updates: any = {};
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
-  if (image_url !== undefined) updates.image_url = image_url;
+  if (body.image_url !== undefined) updates.image_url = typeof body.image_url === 'string' ? body.image_url : null;
   if (phone !== undefined) updates.phone = phone;
   if (email !== undefined) updates.email = email;
   if (website !== undefined) updates.website = website;
