@@ -147,3 +147,11 @@ export const validateVendorName = (name: string, excludeId?: number) =>
     excludeId,
     idField: 'vendor_id'
   });
+
+export const validateWhatsNewTitle = (title: string, excludeId?: number) =>
+  checkNameUniqueness(title, {
+    table: 'whats_new',
+    nameField: 'title',
+    excludeId,
+    idField: 'whats_new_id'
+  });

@@ -92,6 +92,12 @@ const data = {
       icon: DatabaseIcon,
       roles: ["Owner", "Admin", "Manager"],
     },
+    {
+      title: "What's New",
+      url: "/dashboard/whats-new",
+      icon: FileTextIcon,
+      roles: ["Owner"],
+    },
     // {
     //   title: "Breeders",
     //   url: "/dashboard/breeders",
