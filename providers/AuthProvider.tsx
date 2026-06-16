@@ -142,6 +142,41 @@ export default function AuthProvider({ children }: any) {
     }
   }, [loading, session, path, router]);
 
+  // Proactively redirect to login when token expires
+  useEffect(() => {
+    if (!session?.expires_at) return;
+
+    const expiresAtMs = session.expires_at * 1000;
+    const timeUntilExpiry = expiresAtMs - Date.now();
+
+    if (timeUntilExpiry <= 0) {
+      setSession(null);
+      setUserDetails(null);
+      setRoles([]);
+      setSelected_vendor(null);
+      setSelected_roles([]);
+      setPermissions([]);
+      setSelected_vendor_location_id(null);
+      storage.clear();
+      localStorage.clear();
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setSession(null);
+      setUserDetails(null);
+      setRoles([]);
+      setSelected_vendor(null);
+      setSelected_roles([]);
+      setPermissions([]);
+      setSelected_vendor_location_id(null);
+      storage.clear();
+      localStorage.clear();
+    }, timeUntilExpiry - 10000);
+
+    return () => clearTimeout(timeout);
+  }, [session?.access_token, session?.expires_at]);
+
   const fetchSession = async (newSession: Session | null) => {
     try {
       if (newSession?.user?.id) {
@@ -157,13 +192,27 @@ export default function AuthProvider({ children }: any) {
 
         const payload = await response.json();
 
-        if (response.status === 401 && newSession?.refresh_token) {
-          const refreshedSession = await refreshSessionFromServer(newSession);
+        if (response.status === 401) {
+          if (newSession?.refresh_token) {
+            const refreshedSession = await refreshSessionFromServer(newSession);
 
-          if (refreshedSession) {
-            await fetchSession(refreshedSession);
-            return;
+            if (refreshedSession) {
+              await fetchSession(refreshedSession);
+              return;
+            }
           }
+
+          // Token expired and refresh failed - auto redirect to login
+          setSession(null);
+          setUserDetails(null);
+          setRoles([]);
+          setSelected_vendor(null);
+          setSelected_roles([]);
+          setPermissions([]);
+          setSelected_vendor_location_id(null);
+          storage.clear();
+          localStorage.clear();
+          return;
         }
 
         if (response.ok && payload.profile) {

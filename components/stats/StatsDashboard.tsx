@@ -7,7 +7,7 @@ import { UserGrowthChart } from "./UserGrowthChart"
 import { BoostStats } from "./BoostStats"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
-import { Users, Building, Stethoscope, Dog, PawPrint, Zap } from "lucide-react"
+import { Users, Building, Stethoscope, PawPrint, Zap } from "lucide-react"
 
 // Define types for our data
 type AnimalTypeData = {
@@ -33,6 +33,7 @@ export function StatsDashboard() {
     serviceProviders: {} as ServiceCategoryStats,
     totalServiceProviders: 0,
     animalTypes: [] as AnimalTypeData[],
+    totalBreeds: 0,
     boostedEntities: {
       total: 0,
       byCategory: {} as ServiceCategoryStats
@@ -54,7 +55,8 @@ export function StatsDashboard() {
         usersResult,
         serviceProvidersResult,
         activeBoostedResult,
-        animalTypesResult
+        animalTypesResult,
+        breedsResult
       ] = await Promise.all([
         // Get users count
         supabase
@@ -105,7 +107,12 @@ export function StatsDashboard() {
                 )
               )
             )
-          `)
+          `),
+
+        // Get total breeds count
+        supabase
+          .from('breeds')
+          .select('*', { count: 'exact', head: true }),
       ])
 
       // Process service providers data
@@ -173,6 +180,7 @@ export function StatsDashboard() {
         serviceProviders: serviceProviderStats,
         totalServiceProviders,
         animalTypes: animalTypesWithDistribution,
+        totalBreeds: breedsResult.count || 0,
         boostedEntities: {
           total: totalBoostedCount,
           byCategory: boostedByCategory
@@ -238,11 +246,10 @@ export function StatsDashboard() {
           subtitle="registered vets"
         />
         <StatsCard 
-          title="Breeders" 
-          value={stats.serviceProviders['Breeders'] || 0} 
-          icon={<Dog className="h-4 w-4" />}
-          change={{ value: 15.3, isPositive: true }}
-          subtitle="registered breeders"
+          title="Breeds" 
+          value={stats.totalBreeds} 
+          icon={<PawPrint className="h-4 w-4" />}
+          subtitle="total breeds"
         />
       </div>
 
@@ -315,7 +322,7 @@ export function StatsDashboard() {
           <CardHeader>
             <CardTitle>Animal Types Distribution</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Percentage of breeds with active breeders
+              Distribution of breeds by animal type
             </p>
           </CardHeader>
           <CardContent>
@@ -338,8 +345,8 @@ export function StatsDashboard() {
                   </Pie>
                   <Tooltip 
                     formatter={(value, name, props) => [
-                      `${value} breeds with breeders (${props.payload.percentage}%)`, 
-                      'Breeds Covered'
+                      `${value} breeds (${props.payload.percentage}%)`, 
+                      'Breeds'
                     ]} 
                   />
                   <Legend />
