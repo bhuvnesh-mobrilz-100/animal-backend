@@ -72,6 +72,7 @@ export function PlacesAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<any>(null)
   const onChangeRef = useRef(onChange)
+  const lastKnownLatLng = useRef({ lat: 0, lng: 0 })
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API 
 
@@ -114,9 +115,12 @@ export function PlacesAutocomplete({
 
           const formattedAddress = place.formatted_address || place.name || inputRef.current?.value || ""
           const location = place.geometry.location
+          const lat = location.lat()
+          const lng = location.lng()
 
+          lastKnownLatLng.current = { lat, lng }
           setInputValue(formattedAddress)
-          onChangeRef.current(formattedAddress, location.lat(), location.lng())
+          onChangeRef.current(formattedAddress, lat, lng)
         })
 
         setIsReady(true)
@@ -141,7 +145,18 @@ export function PlacesAutocomplete({
     setInputValue(nextValue)
 
     if (!nextValue) {
+      lastKnownLatLng.current = { lat: 0, lng: 0 }
       onChangeRef.current("", 0, 0)
+    }
+  }
+
+  const handleBlur = () => {
+    if (inputValue !== value) {
+      onChangeRef.current(
+        inputValue,
+        lastKnownLatLng.current.lat,
+        lastKnownLatLng.current.lng
+      )
     }
   }
 
@@ -151,6 +166,7 @@ export function PlacesAutocomplete({
         ref={inputRef}
         value={inputValue}
         onChange={handleChange}
+        onBlur={handleBlur}
         placeholder={placeholder}
         className="pr-10"
       />

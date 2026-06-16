@@ -6,8 +6,39 @@ import { DataTableColumnHeader } from "../DataTableColumnHeader"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { MapPin, Phone, Star, PawPrint } from "lucide-react"
+import { Clock, MapPin, Phone, Star, ShieldCheck } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+const DAY_LABELS: Record<string, string> = {
+  monday: "Mon", tuesday: "Tue", wednesday: "Wed",
+  thursday: "Thu", friday: "Fri", saturday: "Sat", sunday: "Sun"
+}
+
+function OperatingHoursBadge({ operating_hours }: { operating_hours?: any }) {
+  if (!operating_hours) return <span className="text-muted-foreground">Not set</span>
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+  const todayHours = operating_hours[today]
+
+  if (!todayHours?.isOpen) {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        <Clock className="h-3 w-3 mr-1" />
+        Closed today
+      </Badge>
+    )
+  }
+
+  const openTime = new Date(`2000-01-01T${todayHours.openTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const closeTime = new Date(`2000-01-01T${todayHours.closeTime}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+
+  return (
+    <Badge variant="outline" className="text-xs">
+      <Clock className="h-3 w-3 mr-1" />
+      Today: {openTime} - {closeTime}
+    </Badge>
+  )
+}
 
 export const columns: ColumnDef<PetFriendlyPlace>[] = [
   {
@@ -51,24 +82,51 @@ export const columns: ColumnDef<PetFriendlyPlace>[] = [
     },
   },
   {
-    accessorKey: "animal_types",
+    id: "operating_hours",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Animal Types" />
+      <DataTableColumnHeader column={column} title="Hours" />
     ),
     cell: ({ row }) => {
       const place = row.original
+      return <OperatingHoursBadge operating_hours={(place as any).operating_hours} />
+    },
+  },
+  {
+    id: "amenities",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Amenities" />
+    ),
+    cell: ({ row }) => {
+      const amenities = (row.original as any).amenities as string[] | undefined
+      if (!amenities || amenities.length === 0) return <span className="text-muted-foreground">None</span>
       return (
-        <div className="flex flex-wrap gap-1">
-          {place.animal_types && place.animal_types.length > 0 ? (
-            place.animal_types.map((type) => (
-              <Badge key={type.animal_type_id} variant="outline" className="flex items-center gap-1">
-                <PawPrint className="h-3 w-3" />
-                {type.name}
-              </Badge>
-            ))
-          ) : (
-            <span className="text-muted-foreground">No animal types</span>
+        <div className="flex flex-wrap gap-1 max-w-[200px]">
+          {amenities.slice(0, 3).map((a, i) => (
+            <Badge key={i} variant="outline" className="text-xs">
+              {a}
+            </Badge>
+          ))}
+          {amenities.length > 3 && (
+            <Badge variant="secondary" className="text-xs">
+              +{amenities.length - 3}
+            </Badge>
           )}
+        </div>
+      )
+    },
+  },
+  {
+    id: "pet_policy",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Pet Policy" />
+    ),
+    cell: ({ row }) => {
+      const petPolicy = (row.original as any).pet_policy as string | undefined
+      if (!petPolicy) return <span className="text-muted-foreground">Not set</span>
+      return (
+        <div className="flex items-center gap-1 max-w-[200px]">
+          <ShieldCheck className="h-3 w-3 text-muted-foreground shrink-0" />
+          <span className="truncate text-sm">{petPolicy}</span>
         </div>
       )
     },
@@ -133,6 +191,20 @@ export const columns: ColumnDef<PetFriendlyPlace>[] = [
             <span className="text-muted-foreground">No location</span>
           )}
         </div>
+      )
+    },
+  },
+  {
+    accessorKey: "is_verified",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Verified" />
+    ),
+    cell: ({ row }) => {
+      const isVerified = (row.original as any).is_verified as boolean | undefined
+      return (
+        <Badge variant={isVerified ? "default" : "secondary"}>
+          {isVerified ? "Verified" : "Unverified"}
+        </Badge>
       )
     },
   },

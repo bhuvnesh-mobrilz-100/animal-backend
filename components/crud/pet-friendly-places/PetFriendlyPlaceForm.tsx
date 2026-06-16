@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { PetFriendlyPlace, petFriendlyPlaceSchema, AnimalType } from "./schema"
+import { PetFriendlyPlace, petFriendlyPlaceSchema } from "./schema"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch"
 import { ImageUpload } from "@/components/ui/image-upload"
 import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { createLocation, updateLocation } from "@/lib/locations-api"
+import { upsertLocation } from "@/lib/locations-api"
 import { toast } from "sonner"
 import { validatePetFriendlyPlaceName } from "@/lib/name-validation"
 import { PlacesAutocomplete } from "@/components/ui/places-autocomplete"
@@ -31,21 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-import { X } from "lucide-react"
+import { X, Plus } from "lucide-react"
+import { OperatingHoursTab } from "@/components/crud/service-providers/OperatingHoursTab"
 
 interface PetFriendlyPlaceFormProps {
   place?: PetFriendlyPlace
@@ -53,14 +41,21 @@ interface PetFriendlyPlaceFormProps {
   onCancel: () => void
 }
 
+const DEFAULT_OPERATING_HOURS = {
+  monday: { isOpen: true, openTime: "09:00", closeTime: "17:00" },
+  tuesday: { isOpen: true, openTime: "09:00", closeTime: "17:00" },
+  wednesday: { isOpen: true, openTime: "09:00", closeTime: "17:00" },
+  thursday: { isOpen: true, openTime: "09:00", closeTime: "17:00" },
+  friday: { isOpen: true, openTime: "09:00", closeTime: "17:00" },
+  saturday: { isOpen: false, openTime: "09:00", closeTime: "17:00" },
+  sunday: { isOpen: false, openTime: "09:00", closeTime: "17:00" }
+}
+
 export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendlyPlaceFormProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [animalTypes, setAnimalTypes] = useState<AnimalType[]>([])
-  const [selectedAnimalTypes, setSelectedAnimalTypes] = useState<AnimalType[]>([])
-  const [commandOpen, setCommandOpen] = useState(false)
+  const [amenityInput, setAmenityInput] = useState("")
   const isEditing = !!place
 
-  // Initialize form with default values or existing place data
   const form = useForm<PetFriendlyPlace>({
     resolver: zodResolver(petFriendlyPlaceSchema),
     defaultValues: place ? {
@@ -68,63 +63,41 @@ export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendly
       description: place.description || "",
       image_url: place.image_url || "",
       phone: place.phone || "",
+      email: (place as any).email || "",
+      website: (place as any).website || "",
       rating: place.rating || 0,
+      is_verified: (place as any).is_verified ?? false,
       location_id: place.location_id,
       address: place.location?.address || "",
       latitude: place.location?.latitude || "",
       longitude: place.location?.longitude || "",
       show_publicly: place.location?.show_publicly ?? true,
+      operating_hours: (place as any).operating_hours || DEFAULT_OPERATING_HOURS,
+      amenities: (place as any).amenities || [],
+      pet_policy: (place as any).pet_policy || "",
     } : {
       name: "",
       description: "",
       image_url: "",
       phone: "",
+      email: "",
+      website: "",
       rating: 0,
+      is_verified: false,
       location_id: undefined,
       address: "",
       latitude: "",
       longitude: "",
       show_publicly: true,
+      operating_hours: DEFAULT_OPERATING_HOURS,
+      amenities: [],
+      pet_policy: "",
     },
   })
-
-  useEffect(() => {
-    fetchAnimalTypes()
-    if (place?.animal_types) {
-      setSelectedAnimalTypes(place.animal_types)
-    }
-  }, [place])
-
-  const fetchAnimalTypes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("animal_types")
-        .select("*")
-        .order("name")
-
-      if (error) throw error
-      setAnimalTypes(data || [])
-    } catch (error) {
-      console.error("Error fetching animal types:", error)
-      toast.error("Failed to load animal types")
-    }
-  }
-
-  const handleSelectAnimalType = (animalType: AnimalType) => {
-    if (!selectedAnimalTypes.some(type => type.animal_type_id === animalType.animal_type_id)) {
-      setSelectedAnimalTypes([...selectedAnimalTypes, animalType])
-    }
-    setCommandOpen(false)
-  }
-
-  const handleRemoveAnimalType = (animalTypeId: number) => {
-    setSelectedAnimalTypes(selectedAnimalTypes.filter(type => type.animal_type_id !== animalTypeId))
-  }
 
   async function onSubmit(data: PetFriendlyPlace) {
     setIsLoading(true)
     try {
-      // Check name uniqueness
       const { isUnique, error: validationError } = await validatePetFriendlyPlaceName(
         data.name,
         isEditing ? place.pet_friendly_place_id : undefined
@@ -145,93 +118,46 @@ export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendly
 
       let locationId = data.location_id
 
-      // Handle location creation or update
       if (data.address) {
-        if (data.location_id) {
-          await updateLocation(data.location_id, {
-            address: data.address,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            show_publicly: data.show_publicly,
-          })
-          locationId = data.location_id
-        } else {
-          const locationData = await createLocation({
-            address: data.address,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            show_publicly: data.show_publicly,
-          })
-          locationId = locationData.location_id
-        }
+        const locationData = await upsertLocation({
+          address: data.address,
+          latitude: data.latitude || null,
+          longitude: data.longitude || null,
+          show_publicly: data.show_publicly,
+        })
+        locationId = locationData.location_id
       }
 
-      // Prepare place data without location fields
-      const placeData = {
-        name: data.name,
-        description: data.description,
-        image_url: data.image_url,
-        phone: data.phone,
-        rating: data.rating,
+      // Defensively extract location form fields + any stray joined location
+      const { address, latitude, longitude, show_publicly, location, ...placeData } = data as any
+
+      const payload = {
+        ...placeData,
         location_id: locationId,
       }
 
+      // Ensure operating_hours defaults if not set
+      if (!payload.operating_hours) {
+        payload.operating_hours = DEFAULT_OPERATING_HOURS
+      }
+
       if (isEditing) {
-        // Update existing place
         const { error } = await supabase
           .from("pet_friendly_places")
-          .update(placeData)
+          .update(payload)
           .eq("pet_friendly_place_id", place.pet_friendly_place_id)
 
         if (error) throw error
 
-        // Update animal types
-        if (place.pet_friendly_place_id) {
-          // First delete existing relationships
-          await supabase
-            .from("pet_friendly_place_animals")
-            .delete()
-            .eq("pet_friendly_place_id", place.pet_friendly_place_id)
-
-          // Then insert new relationships
-          if (selectedAnimalTypes.length > 0) {
-            const animalTypeRelations = selectedAnimalTypes.map(type => ({
-              pet_friendly_place_id: place.pet_friendly_place_id,
-              animal_type_id: type.animal_type_id
-            }))
-
-            const { error: relError } = await supabase
-              .from("pet_friendly_place_animals")
-              .insert(animalTypeRelations)
-
-            if (relError) throw relError
-          }
-        }
-
         toast.success("Pet friendly place updated successfully")
       } else {
-        // Create new place
         const { data: newPlace, error } = await supabase
           .from("pet_friendly_places")
-          .insert(placeData)
+          .insert(payload)
           .select("pet_friendly_place_id")
           .single()
 
         if (error) throw error
-
-        // Insert animal types relationships
-        if (newPlace && selectedAnimalTypes.length > 0) {
-          const animalTypeRelations = selectedAnimalTypes.map(type => ({
-            pet_friendly_place_id: newPlace.pet_friendly_place_id,
-            animal_type_id: type.animal_type_id
-          }))
-
-          const { error: relError } = await supabase
-            .from("pet_friendly_place_animals")
-            .insert(animalTypeRelations)
-
-          if (relError) throw relError
-        }
 
         toast.success("Pet friendly place created successfully")
       }
@@ -300,97 +226,156 @@ export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendly
           )}
         />
 
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter phone number" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input placeholder="email@example.com" type="email" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="website"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Website</FormLabel>
+                <FormControl>
+                  <Input placeholder="https://example.com" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="rating"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Rating</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange(parseInt(value))}
+                  defaultValue={field.value?.toString() || "0"}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a rating" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {[0, 1, 2, 3, 4, 5].map((rating) => (
+                      <SelectItem key={rating} value={rating.toString()}>
+                        {rating === 0 ? "No Rating" : `${rating} Star${rating !== 1 ? "s" : ""}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <FormLabel>Amenities</FormLabel>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {form.watch("amenities")?.map((amenity, index) => (
+              <Badge key={index} variant="secondary">
+                {amenity}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-4 w-4 p-0 ml-1"
+                  onClick={() => {
+                    const current = form.getValues("amenities") || []
+                    form.setValue("amenities", current.filter((_, i) => i !== index))
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add an amenity..."
+              value={amenityInput}
+              onChange={(e) => setAmenityInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  const trimmed = amenityInput.trim()
+                  if (trimmed) {
+                    const current = form.getValues("amenities") || []
+                    form.setValue("amenities", [...current, trimmed])
+                    setAmenityInput("")
+                  }
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                const trimmed = amenityInput.trim()
+                if (trimmed) {
+                  const current = form.getValues("amenities") || []
+                  form.setValue("amenities", [...current, trimmed])
+                  setAmenityInput("")
+                }
+              }}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         <FormField
           control={form.control}
-          name="phone"
+          name="pet_policy"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone</FormLabel>
+              <FormLabel>Pet Policy</FormLabel>
               <FormControl>
-                <Input placeholder="Enter phone number" {...field} value={field.value || ""} />
+                <Textarea
+                  placeholder="Describe the pet policy (e.g., leashed pets allowed, weight limits, fees...)"
+                  className="resize-none"
+                  rows={3}
+                  {...field}
+                  value={field.value || ""}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="rating"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rating</FormLabel>
-              <Select
-                onValueChange={(value) => field.onChange(parseInt(value))}
-                defaultValue={field.value?.toString() || "0"}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a rating" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {[0, 1, 2, 3, 4, 5].map((rating) => (
-                    <SelectItem key={rating} value={rating.toString()}>
-                      {rating === 0 ? "No Rating" : `${rating} Star${rating !== 1 ? "s" : ""}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="space-y-2">
-          <FormLabel>Animal Types</FormLabel>
-          <Popover open={commandOpen} onOpenChange={setCommandOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={commandOpen}
-                className="w-full justify-between"
-              >
-                Select animal types...
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search animal types..." />
-                <CommandList>
-                  <CommandEmpty>No animal types found.</CommandEmpty>
-                  <CommandGroup>
-                    {animalTypes.map((animalType) => (
-                      <CommandItem
-                        key={animalType.animal_type_id}
-                        onSelect={() => handleSelectAnimalType(animalType)}
-                      >
-                        {animalType.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {selectedAnimalTypes.map((type) => (
-              <Badge key={type.animal_type_id} variant="secondary">
-                {type.name}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-4 w-4 p-0 ml-1"
-                  onClick={() => handleRemoveAnimalType(type.animal_type_id)}
-                >
-                  <X className="h-3 w-3" />
-                  <span className="sr-only">Remove {type.name}</span>
-                </Button>
-              </Badge>
-            ))}
-          </div>
-        </div>
+        <OperatingHoursTab form={form} />
 
         <FormField
           control={form.control}
@@ -450,6 +435,27 @@ export function PetFriendlyPlaceForm({ place, onSuccess, onCancel }: PetFriendly
                 <FormLabel className="text-base">Show Location Publicly</FormLabel>
                 <FormDescription>
                   Allow users to see the exact location
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="is_verified"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Verified</FormLabel>
+                <FormDescription>
+                  Mark this place as verified
                 </FormDescription>
               </div>
               <FormControl>

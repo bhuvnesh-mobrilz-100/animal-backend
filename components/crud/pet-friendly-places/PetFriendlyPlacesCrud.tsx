@@ -42,44 +42,15 @@ export function PetFriendlyPlacesCrud() {
   const fetchPlaces = async () => {
     setLoading(true)
     try {
-      // Fetch pet friendly places with their locations
       const { data: placesData, error: placesError } = await supabase
         .from("pet_friendly_places")
-        .select(`
-          *,
-          location:locations(*)
-        `)
+        .select(`*, location:locations(*)`)
         .eq("is_deleted", false)
         .order("name")
 
       if (placesError) throw placesError
 
-      // For each place, fetch its animal types
-      const placesWithAnimalTypes = await Promise.all(
-        (placesData || []).map(async (place) => {
-          const { data: animalTypesData, error: animalTypesError } = await supabase
-            .from("pet_friendly_place_animals")
-            .select(`
-              animal_type:animal_types(animal_type_id, name, image_url)
-            `)
-            .eq("pet_friendly_place_id", place.pet_friendly_place_id)
-
-          if (animalTypesError) {
-            console.error("Error fetching animal types for place:", animalTypesError)
-            return {
-              ...place,
-              animal_types: []
-            }
-          }
-
-          return {
-            ...place,
-            animal_types: animalTypesData.map(item => item.animal_type)
-          }
-        })
-      )
-
-      setPlaces(placesWithAnimalTypes)
+      setPlaces(placesData || [])
     } catch (error) {
       console.error("Error fetching pet friendly places:", error)
       toast.error("Failed to load pet friendly places")
