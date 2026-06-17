@@ -26,7 +26,7 @@ export async function ensureAnimalImageBucketExists() {
   const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
 
   if (listError) {
-    throw new Error(`Unable to inspect storage buckets: ${listError.message}`);
+    console.warn('Could not list storage buckets:', listError.message);
   }
 
   const existingBucket = buckets?.find((bucket) => bucket.name === ANIMAL_IMAGE_BUCKET);
@@ -47,7 +47,21 @@ export async function ensureAnimalImageBucketExists() {
   });
 
   if (createError) {
-    throw new Error(`Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${createError.message}`);
+    console.warn('Storage API bucket creation failed, trying direct SQL:', createError.message);
+
+    const { error: upsertError } = await supabaseAdmin
+      .schema('storage')
+      .from('buckets')
+      .upsert(
+        { id: ANIMAL_IMAGE_BUCKET, name: ANIMAL_IMAGE_BUCKET, public: true },
+        { onConflict: 'id' }
+      );
+
+    if (upsertError) {
+      throw new Error(
+        `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${upsertError.message}`
+      );
+    }
   }
 }
 
