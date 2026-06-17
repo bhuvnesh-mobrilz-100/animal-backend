@@ -177,6 +177,12 @@ const data = {
       roles: ["Owner", "Admin"],
     },
     {
+      title: "Support",
+      url: "/dashboard/support",
+      icon: HelpCircleIcon,
+      roles: ["Owner", "Admin", "Manager"],
+    },
+    {
       title: "Payments & Billing",
       url: "/dashboard/payments-billing",
       icon: CreditCardIcon,
