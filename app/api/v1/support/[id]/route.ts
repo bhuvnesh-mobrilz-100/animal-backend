@@ -30,8 +30,8 @@ export async function GET(
 
   const params = await context.params;
 
-  const adminCheck = await requireRoles(request, ['Owner', 'Admin', 'Manager']);
-  const isAdmin = !('status' in adminCheck);
+  const normalizedRoles = user.roleNames.map(r => r.toLowerCase());
+  const isAdmin = ['owner', 'admin', 'manager'].some(r => normalizedRoles.includes(r));
 
   let query: any = supabaseAdmin
     .from('support_tickets')
@@ -42,10 +42,14 @@ export async function GET(
     query = query.eq('user_id', user.internalUserId);
   }
 
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data) {
+    return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
   }
 
   return NextResponse.json({ ticket: data });
@@ -55,7 +59,7 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRoles(request, ['Owner', 'Admin', 'Manager']);
+  const auth = await requireRoles(request, ['Owner', 'Admin']);
   if ('status' in auth) return auth;
 
   const params = await context.params;
@@ -115,8 +119,8 @@ export async function POST(
     return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
   }
 
-  if (!isAdmin && ticket.status === 'closed') {
-    return NextResponse.json({ error: 'Cannot reply to a closed ticket' }, { status: 400 });
+  if (!isAdmin && ['closed', 'resolved'].includes(ticket.status)) {
+    return NextResponse.json({ error: 'Cannot reply to a closed or resolved ticket' }, { status: 400 });
   }
 
   const contentType = request.headers.get('content-type') || '';
@@ -164,16 +168,18 @@ export async function POST(
     return NextResponse.json({ error: replyError.message }, { status: 500 });
   }
 
-  // Status logic: admin reply → in_progress, user reply → keep current/open
-  const newStatus = isAdmin ? 'in_progress' : (ticket.status === 'open' ? 'open' : 'in_progress');
+  const updateFields: Record<string, any> = {
+    last_reply_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (ticket.status === 'open') {
+    updateFields.status = 'in_progress';
+  }
 
   await supabaseAdmin
     .from('support_tickets')
-    .update({
-      status: newStatus,
-      last_reply_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateFields)
     .eq('support_ticket_id', params.id);
 
   return NextResponse.json({ reply: replyResult });

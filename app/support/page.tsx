@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +50,7 @@ function MessageImage({ url }: { url: string | null | undefined }) {
 }
 
 export default function SupportPage() {
+  const { session } = useAuth()
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -56,6 +58,13 @@ export default function SupportPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const authHeaders = (): HeadersInit => {
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` }
+    }
+    return {}
+  }
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
@@ -68,12 +77,12 @@ export default function SupportPage() {
 
   useEffect(() => {
     fetchMyTickets();
-  }, []);
+  }, [session?.access_token]);
 
   async function fetchMyTickets() {
     setLoadingTickets(true);
     try {
-      const res = await fetch("/api/v1/support");
+      const res = await fetch("/api/v1/support", { headers: authHeaders() });
       const data = await res.json();
       if (res.ok) {
         setTickets(data.tickets || []);
@@ -90,7 +99,7 @@ export default function SupportPage() {
     setReplyText("");
     setReplyFile(null);
     try {
-      const res = await fetch(`/api/v1/support/${ticketId}`);
+      const res = await fetch(`/api/v1/support/${ticketId}`, { headers: authHeaders() });
       const data = await res.json();
       if (res.ok) {
         setSelectedTicket(data.ticket);
@@ -113,12 +122,13 @@ export default function SupportPage() {
         formData.append("file", replyFile);
         res = await fetch(`/api/v1/support/${selectedTicket.support_ticket_id}`, {
           method: "POST",
+          headers: authHeaders(),
           body: formData,
         });
       } else {
         res = await fetch(`/api/v1/support/${selectedTicket.support_ticket_id}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ reply: replyText.trim() }),
         });
       }
@@ -156,11 +166,11 @@ export default function SupportPage() {
         formData.append("message", message);
         formData.append("priority", priority);
         formData.append("file", file);
-        res = await fetch("/api/v1/support", { method: "POST", body: formData });
+        res = await fetch("/api/v1/support", { method: "POST", headers: authHeaders(), body: formData });
       } else {
         res = await fetch("/api/v1/support", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ subject, message, priority }),
         });
       }

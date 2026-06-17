@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useAuth } from "@/providers/AuthProvider"
 import { SupportTicket, SupportReply, TICKET_STATUSES } from "./schema"
 import { columns } from "./columns"
 import { DataTable } from "../DataTable"
 import { Button } from "@/components/ui/button"
-import { Loader2, MessageSquare, Send } from "lucide-react"
+import { Loader2, MessageSquare, Send, Paperclip, ImageIcon, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -42,21 +43,31 @@ const priorityStyles: Record<string, string> = {
 }
 
 export function SupportCrud() {
+  const { session } = useAuth()
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [replyText, setReplyText] = useState("")
+  const [replyFile, setReplyFile] = useState<File | null>(null)
+  const replyFileInputRef = useRef<HTMLInputElement>(null)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+
+  const authHeaders = (): HeadersInit => {
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` }
+    }
+    return {}
+  }
 
   useEffect(() => {
     fetchTickets()
-  }, [])
+  }, [session?.access_token])
 
   const fetchTickets = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/v1/support?all=true")
+      const response = await fetch("/api/v1/support?all=true", { headers: authHeaders() })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || "Failed to load tickets")
       setTickets(result.tickets || [])
@@ -70,9 +81,10 @@ export function SupportCrud() {
 
   const openTicketDetail = async (ticket: SupportTicket) => {
     setSelectedTicket(null)
+    setReplyFile(null)
     setIsDetailOpen(true)
     try {
-      const response = await fetch(`/api/v1/support/${ticket.support_ticket_id}`)
+      const response = await fetch(`/api/v1/support/${ticket.support_ticket_id}`, { headers: authHeaders() })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || "Failed to load ticket")
       setSelectedTicket(result.ticket)
@@ -88,7 +100,7 @@ export function SupportCrud() {
     try {
       const response = await fetch(`/api/v1/support/${ticketId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       })
       const result = await response.json()
@@ -109,15 +121,28 @@ export function SupportCrud() {
   const handleSubmitReply = async () => {
     if (!selectedTicket || !replyText.trim()) return
     try {
-      const response = await fetch(`/api/v1/support/${selectedTicket.support_ticket_id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply: replyText.trim() }),
-      })
+      let response: Response
+      if (replyFile) {
+        const formData = new FormData()
+        formData.append("reply", replyText.trim())
+        formData.append("file", replyFile)
+        response = await fetch(`/api/v1/support/${selectedTicket.support_ticket_id}`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: formData,
+        })
+      } else {
+        response = await fetch(`/api/v1/support/${selectedTicket.support_ticket_id}`, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ reply: replyText.trim() }),
+        })
+      }
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || "Failed to send reply")
       toast.success("Reply sent successfully")
       setReplyText("")
+      setReplyFile(null)
       openTicketDetail(selectedTicket)
     } catch (error) {
       console.error("Error sending reply:", error)
@@ -274,7 +299,30 @@ export function SupportCrud() {
                     onChange={(e) => setReplyText(e.target.value)}
                     rows={3}
                   />
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <input
+                        type="file"
+                        ref={replyFileInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) => setReplyFile(e.target.files?.[0] || null)}
+                      />
+                      {replyFile ? (
+                        <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-1.5 rounded-md w-fit">
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="truncate max-w-[150px]">{replyFile.name}</span>
+                          <button onClick={() => { setReplyFile(null); if (replyFileInputRef.current) replyFileInputRef.current.value = ""; }}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button type="button" variant="outline" size="sm" onClick={() => replyFileInputRef.current?.click()}>
+                          <Paperclip className="h-4 w-4 mr-1" />
+                          Attach Image
+                        </Button>
+                      )}
+                    </div>
                     <Button onClick={handleSubmitReply} disabled={!replyText.trim()}>
                       <Send className="h-4 w-4 mr-2" />
                       Send Reply

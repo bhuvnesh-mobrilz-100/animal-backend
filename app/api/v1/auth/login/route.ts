@@ -50,6 +50,13 @@ async function handleLogin(email: string, password: string) {
     }
 
     if (data?.user && data.session?.access_token && data.session?.refresh_token) {
+      // Set auth_user_id on the internal user record if not already set (e.g. seed users)
+      await supabaseAdmin
+        .from('users')
+        .update({ auth_user_id: data.user.id })
+        .eq('email', email)
+        .is('auth_user_id', null);
+
       await setCurrentTokenHashes(data.user.id, data.session.access_token, data.session.refresh_token);
     }
 

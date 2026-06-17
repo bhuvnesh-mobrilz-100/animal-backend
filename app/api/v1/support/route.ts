@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/server-supabase';
-import { getUserFromRequest, requireRoles } from '@/lib/server-auth';
+import { getUserFromRequest } from '@/lib/server-auth';
 import { uploadAnimalImage } from '@/lib/storage-upload';
 
 const TICKET_SELECT = `
@@ -10,6 +10,12 @@ const TICKET_SELECT = `
   ),
   assigned_user:users!support_tickets_assigned_to_fkey (
     user_id, name, surname, email
+  ),
+  support_replies (
+    *,
+    users!support_replies_responder_user_id_fkey (
+      name, surname, email
+    )
   )
 `;
 
@@ -22,6 +28,15 @@ async function readPayload(request: NextRequest) {
       message: formData.get('message'),
       priority: formData.get('priority'),
       file: formData.get('file'),
+    };
+  }
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    const formData = await request.formData();
+    return {
+      subject: formData.get('subject'),
+      message: formData.get('message'),
+      priority: formData.get('priority'),
+      file: null,
     };
   }
   try {
@@ -40,8 +55,10 @@ export async function GET(request: NextRequest) {
   const all = request.nextUrl.searchParams.get('all') === 'true';
 
   if (all) {
-    const auth = await requireRoles(request, ['Owner', 'Admin', 'Manager']);
-    if ('status' in auth) return auth;
+    const normalizedRoles = user.roleNames.map(r => r.toLowerCase());
+    if (!['owner', 'admin', 'manager'].some(r => normalizedRoles.includes(r))) {
+      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('support_tickets')
@@ -93,6 +110,7 @@ export async function POST(request: NextRequest) {
     user_id: user.internalUserId,
     subject: String(body.subject).trim(),
     initial_message: String(body.message).trim(),
+    status: 'in_progress',
     priority: body.priority || 'medium',
   };
 

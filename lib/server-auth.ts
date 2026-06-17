@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from './server-supabase';
-import { hashAccessToken } from './auth-session';
+
 
 type SupabaseUser = {
   id: string;
@@ -92,7 +92,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
 
   const internalQuery = await supabaseAdmin
     .from('users')
-    .select('user_id, current_access_token_hash')
+    .select('user_id')
     .eq('auth_user_id', user.id)
     .maybeSingle();
 
@@ -102,13 +102,8 @@ export async function getUserFromRequest(request: NextRequest): Promise<Authenti
   }
 
   const internalUserId = internalQuery.data?.user_id ?? null;
-  const storedTokenHash = internalQuery.data?.current_access_token_hash ?? null;
 
-  if (!internalUserId || !storedTokenHash) {
-    return null;
-  }
-
-  if (storedTokenHash !== hashAccessToken(token)) {
+  if (!internalUserId) {
     return null;
   }
 
