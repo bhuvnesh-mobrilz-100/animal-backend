@@ -19,6 +19,8 @@ type RescueCentre = {
   name: string;
   description?: string | null;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   phone?: string | null;
   website?: string | null;
   is_verified: boolean;
@@ -30,6 +32,8 @@ const emptyForm = {
   name: "",
   description: "",
   address: "",
+  latitude: null as number | null,
+  longitude: null as number | null,
   phone: "",
   website: "",
   is_verified: false,
@@ -80,6 +84,8 @@ export default function RescueCentresPage() {
       name: centre.name || "",
       description: centre.description || "",
       address: centre.address || "",
+      latitude: centre.latitude ?? null,
+      longitude: centre.longitude ?? null,
       phone: centre.phone || "",
       website: centre.website || "",
       is_verified: Boolean(centre.is_verified),
@@ -99,6 +105,8 @@ export default function RescueCentresPage() {
             name: form.name,
             description: form.description || null,
             address: form.address,
+            latitude: form.latitude,
+            longitude: form.longitude,
             phone: form.phone || null,
             website: form.website || null,
             is_verified: form.is_verified,
@@ -116,6 +124,8 @@ export default function RescueCentresPage() {
             name: form.name,
             description: form.description || null,
             address: form.address,
+            latitude: form.latitude,
+            longitude: form.longitude,
             phone: form.phone || null,
             website: form.website || null,
             is_verified: form.is_verified,
@@ -225,6 +235,8 @@ export default function RescueCentresPage() {
                   <span>Phone: {centre.phone || "—"}</span>
                   <span>Website: {centre.website || "—"}</span>
                   <span>Status: {centre.is_verified ? "Verified" : "Unverified"}</span>
+                  <span>Lat: {centre.latitude ?? "—"}</span>
+                  <span>Lng: {centre.longitude ?? "—"}</span>
                 </div>
               </CardContent>
             </Card>
@@ -249,11 +261,21 @@ export default function RescueCentresPage() {
               <Label htmlFor="address">Address</Label>
               <PlacesAutocomplete
                 value={form.address}
-                onChange={(address: string) => setForm((prev) => ({ ...prev, address }))}
+                onChange={(address, lat, lng) => setForm((prev) => ({ ...prev, address, latitude: lat, longitude: lng }))}
                 label=""
                 placeholder="Search for an address..."
                 description="Search an address to fetch the formatted location from Google Maps."
               />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="latitude">Latitude</Label>
+                <Input id="latitude" value={form.latitude ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, latitude: e.target.value ? Number(e.target.value) : null }))} placeholder="Auto-filled from address" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitude">Longitude</Label>
+                <Input id="longitude" value={form.longitude ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, longitude: e.target.value ? Number(e.target.value) : null }))} placeholder="Auto-filled from address" />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>

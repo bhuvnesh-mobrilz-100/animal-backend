@@ -160,6 +160,12 @@ export function PlacesAutocomplete({
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+    }
+  }
+
   const inputField = (
     <div className="relative">
       <Input
@@ -167,6 +173,7 @@ export function PlacesAutocomplete({
         value={inputValue}
         onChange={handleChange}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="pr-10"
       />
