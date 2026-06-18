@@ -149,16 +149,6 @@ export function NavUser() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              {roles.length != 0 && path.includes("dashboard") && (
-                <DropdownMenuItem
-                  onClick={() => {
-                    router.push("/");
-                  }}
-                >
-                  <HomeIcon />
-                  Home
-                </DropdownMenuItem>
-              )}
               {roles.length != 0 && !path.includes("dashboard") && (
                 <DropdownMenuItem
                   onClick={() => {

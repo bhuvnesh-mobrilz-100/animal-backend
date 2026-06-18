@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User as UserIcon, Mail, Phone, Calendar, Shield, CheckCircle } from "lucide-react";
+import { User as UserIcon, Mail, Phone, Calendar, Shield, CheckCircle, Trash2 } from "lucide-react";
+import Swal from "sweetalert2";
+import { useRouter } from "next/navigation";
 
 interface UserProfile {
   user_id: string;
@@ -43,6 +45,7 @@ interface UserProfile {
 
 export default function AccountPage() {
   const { session, userDetails, logOutFunction } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +109,56 @@ export default function AccountPage() {
       setProfile(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Are you absolutely sure?",
+      text: "This action cannot be undone. This will permanently delete your account and remove all your data from our servers.",
+      showCancelButton: true,
+      confirmButtonText: "Yes, delete my account",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+      reverseButtons: true,
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const response = await fetch("/api/v1/auth/delete-account", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: errorData.error || "Failed to delete account",
+        });
+        return;
+      }
+
+      await Swal.fire({
+        icon: "success",
+        title: "Account Deleted",
+        text: "Your account has been permanently deleted.",
+        confirmButtonColor: "#2563eb",
+      });
+
+      await logOutFunction();
+      router.push("/");
+    } catch (error: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "Failed to delete account",
+      });
     }
   };
 
@@ -347,6 +400,27 @@ export default function AccountPage() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-destructive flex items-center gap-2">
+            <Trash2 className="h-5 w-5" />
+            Danger Zone
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Once you delete your account, there is no going back. Please be certain.
+          </p>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteAccount}
+          >
+            Delete My Account
+          </Button>
         </CardContent>
       </Card>
 

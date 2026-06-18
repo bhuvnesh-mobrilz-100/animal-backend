@@ -51,6 +51,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUserRoles, setSelectedUserRoles] = useState<number[]>([]);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
@@ -155,6 +157,55 @@ export default function UsersPage() {
     setIsRoleDialogOpen(true);
   };
 
+  const handleDeleteUser = (user: User) => {
+    const isTargetOwner = user.user_roles.some(ur => ur.roles?.name === "Owner");
+    if (isTargetOwner) {
+      toast({
+        title: "Cannot Delete",
+        description: "Owner accounts cannot be deleted",
+        variant: "destructive",
+      });
+      return;
+    }
+    setUserToDelete(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const response = await fetch(`/api/v1/users?user_id=${userToDelete.user_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete user");
+      }
+
+      toast({
+        title: "Success",
+        description: `User ${userToDelete.user_name || userToDelete.email} has been deleted`,
+      });
+
+      setUsers(users.filter(u => u.user_id !== userToDelete.user_id));
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    }
+  };
+
   const updateUserRoles = async () => {
     if (!selectedUser) return;
 
@@ -237,13 +288,25 @@ export default function UsersPage() {
               <CardTitle className="text-sm font-medium">
                 {user.user_name || user.email}
               </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openRoleDialog(user)}
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openRoleDialog(user)}
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={user.user_roles.some(ur => ur.roles?.name === "Owner")}
+                  title={user.user_roles.some(ur => ur.roles?.name === "Owner") ? "Owner accounts cannot be deleted" : "Delete user"}
+                  onClick={() => handleDeleteUser(user)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground">{user.email}</div>
@@ -261,6 +324,28 @@ export default function UsersPage() {
           </Card>
         ))}
       </div>
+
+      {/* Delete User Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the user{" "}
+              <span className="font-medium">{userToDelete?.user_name || userToDelete?.email}</span>
+              . This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteUser} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Role Assignment Dialog */}
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>

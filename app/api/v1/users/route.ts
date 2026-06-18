@@ -94,6 +94,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
   }
 
+  // Prevent deleting users with Owner role
+  const { data: targetRoles } = await supabaseAdmin
+    .from('user_roles')
+    .select('role_id, roles(name)')
+    .eq('user_id', userId);
+
+  if (targetRoles?.some(r => (r.roles as any)?.name === 'Owner')) {
+    return NextResponse.json({ error: 'Owner accounts cannot be deleted' }, { status: 403 });
+  }
+
   const { error } = await supabaseAdmin.from('users').delete().eq('user_id', userId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
