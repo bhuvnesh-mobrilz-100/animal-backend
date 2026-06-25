@@ -23,15 +23,12 @@ function sanitizeFileName(fileName: string): string {
 }
 
 export async function ensureAnimalImageBucketExists() {
-  const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+  const { data: bucket, error: getError } = await supabaseAdmin.storage.getBucket(
+    ANIMAL_IMAGE_BUCKET
+  );
 
-  if (listError) {
-    console.warn('Could not list storage buckets:', listError.message);
-  }
-
-  const existingBucket = buckets?.find((bucket) => bucket.name === ANIMAL_IMAGE_BUCKET);
-  if (existingBucket) {
-    if (!existingBucket.public) {
+  if (bucket) {
+    if (!bucket.public) {
       const { error: updateError } = await supabaseAdmin.storage.updateBucket(ANIMAL_IMAGE_BUCKET, {
         public: true,
       });
@@ -47,19 +44,12 @@ export async function ensureAnimalImageBucketExists() {
   });
 
   if (createError) {
-    console.warn('Storage API bucket creation failed, trying RPC fallback:', createError.message);
-
-    const { error: upsertError } = await supabaseAdmin.rpc('create_storage_bucket', {
-      bucket_id: ANIMAL_IMAGE_BUCKET,
-      bucket_name: ANIMAL_IMAGE_BUCKET,
-      is_public: true,
-    });
-
-    if (upsertError) {
-      throw new Error(
-        `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${upsertError.message}`
-      );
+    if (createError.message?.toLowerCase().includes('already exists')) {
+      return;
     }
+    throw new Error(
+      `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${createError.message}`
+    );
   }
 }
 
