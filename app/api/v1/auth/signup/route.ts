@@ -4,6 +4,16 @@ import { buildAuthProfile, PUBLIC_SIGNUP_ROLE_NAMES } from '@/lib/auth-profile';
 import { setCurrentTokenHashes } from '@/lib/auth-session';
 import { uploadAnimalImage } from '@/lib/storage-upload';
 
+function isSerializedFileObject(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value === '[object File]' || value === '[object Object]';
+  }
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return !('url' in value || value instanceof URL);
+  }
+  return false;
+}
+
 // ----------------------------------------------------------------------
 // Geocoding helper using Google Maps Geocoding API
 // ----------------------------------------------------------------------
@@ -72,7 +82,16 @@ export async function POST(request: NextRequest) {
       confirm_password = body?.confirm_password?.toString() || '';
       full_name = body?.full_name?.toString() || '';
       location = body?.location?.toString() || undefined;
-      profile_image_url = body?.profile_image_url?.toString() || undefined;
+
+      const rawImage = body?.profile_image_url;
+      if (isSerializedFileObject(rawImage)) {
+        return NextResponse.json(
+          { error: 'profile_image_url must be a valid image URL string. Use multipart/form-data to upload a file.' },
+          { status: 400 }
+        );
+      }
+      profile_image_url = rawImage?.toString() || undefined;
+
       roleName = body?.roleName?.toString() || 'Guest';
     } else {
       const formData = await request.formData();
@@ -82,13 +101,34 @@ export async function POST(request: NextRequest) {
       confirm_password = formData.get('confirm_password')?.toString() || '';
       full_name = formData.get('full_name')?.toString() || '';
       location = formData.get('location')?.toString() || undefined;
+
       const profileImageField = formData.get('profile_image_url');
       if (profileImageField instanceof File) {
-        const { url } = await uploadAnimalImage(profileImageField, 'avatars');
-        profile_image_url = url;
-      } else {
-        profile_image_url = profileImageField?.toString() || undefined;
+        if (!profileImageField.type.startsWith('image/')) {
+          return NextResponse.json({ error: 'Profile image must be an image file' }, { status: 400 });
+        }
+        if (profileImageField.size > 50 * 1024 * 1024) {
+          return NextResponse.json({ error: 'Profile image must be less than 50MB' }, { status: 400 });
+        }
+        try {
+          const { url } = await uploadAnimalImage(profileImageField, 'avatars');
+          profile_image_url = url;
+        } catch (uploadErr: any) {
+          console.error('Profile image upload failed:', uploadErr);
+          return NextResponse.json(
+            { error: `Profile image upload failed: ${uploadErr.message || 'Unknown error'}` },
+            { status: 400 }
+          );
+        }
+      } else if (profileImageField && profileImageField.toString() !== '[object File]') {
+        profile_image_url = profileImageField.toString();
+      } else if (profileImageField) {
+        return NextResponse.json(
+          { error: 'profile_image_url must be a valid image file or URL string' },
+          { status: 400 }
+        );
       }
+
       roleName = formData.get('roleName')?.toString() || 'Guest';
     }
 
@@ -117,7 +157,10 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Signup POST error:', error);
-    return NextResponse.json({ error: 'Signup failed. Please try again later.' }, { status: 500 });
+    return NextResponse.json(
+      { error: `Signup failed. ${error?.message || 'Please try again later.'}` },
+      { status: 500 }
+    );
   }
 }
 
