@@ -47,15 +47,13 @@ export async function ensureAnimalImageBucketExists() {
   });
 
   if (createError) {
-    console.warn('Storage API bucket creation failed, trying direct SQL:', createError.message);
+    console.warn('Storage API bucket creation failed, trying RPC fallback:', createError.message);
 
-    const { error: upsertError } = await supabaseAdmin
-      .schema('storage')
-      .from('buckets')
-      .upsert(
-        { id: ANIMAL_IMAGE_BUCKET, name: ANIMAL_IMAGE_BUCKET, public: true },
-        { onConflict: 'id' }
-      );
+    const { error: upsertError } = await supabaseAdmin.rpc('create_storage_bucket', {
+      bucket_id: ANIMAL_IMAGE_BUCKET,
+      bucket_name: ANIMAL_IMAGE_BUCKET,
+      is_public: true,
+    });
 
     if (upsertError) {
       throw new Error(
