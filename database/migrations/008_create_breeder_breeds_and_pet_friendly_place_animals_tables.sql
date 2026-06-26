@@ -7,7 +7,6 @@ create table if not exists public.breeder_breeds (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone null default now(),
   constraint breeder_breeds_pkey primary key (breeder_breed_id),
-  constraint breeder_breeds_breeder_id_fkey foreign key (breeder_id) references public.breeders(breeder_id),
   constraint breeder_breeds_breed_id_fkey foreign key (breed_id) references public.breeds(breed_id),
   constraint breeder_breeds_service_provider_id_fkey foreign key (service_provider_id) references public.service_providers(service_provider_id)
 ) tablespace pg_default;

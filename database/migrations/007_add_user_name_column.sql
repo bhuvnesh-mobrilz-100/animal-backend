@@ -168,7 +168,6 @@ CREATE TABLE IF NOT EXISTS public.entity_boosts (
     user_id BIGINT REFERENCES public.users(user_id) ON DELETE SET NULL,
     boost_package_id BIGINT REFERENCES public.boost_packages(boost_package_id) ON DELETE SET NULL,
     vet_id BIGINT REFERENCES public.vets(vet_id) ON DELETE SET NULL,
-    breeder_id BIGINT REFERENCES public.breeders(breeder_id) ON DELETE SET NULL,
     pet_friendly_place_id BIGINT REFERENCES public.pet_friendly_places(place_id) ON DELETE SET NULL,
     service_provider_id BIGINT REFERENCES public.service_providers(service_provider_id) ON DELETE SET NULL,
     start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -340,16 +339,7 @@ FROM (VALUES
 WHERE NOT EXISTS (
 SELECT 1 FROM public.vets vt WHERE vt.name = v.name AND vt.clinic_name = v.clinic_name
 );
--- 29. DUMMY BREEDERS
-INSERT INTO public.breeders (name, description, address, phone, email, website, is_verified, user_id)
-SELECT v.name, v.description, v.address, v.phone, v.email, v.website, v.is_verified, v.user_id
-FROM (VALUES
-('Cape Puppy Breeders', 'Responsible dog breeders with full health screening.', '3 Breeder Road, Cape Town', '0215553333', 'info@capepuppy.example.com', 'https://capepuppy.example.com', true, (SELECT user_id FROM public.users WHERE email = 'subscriber@example.com')),
-('Cat Comfort Breeders', 'Premium cat breeding and adoption support.', '6 Felina Street, Johannesburg', '0115553334', 'hello@catcomfort.example.com', 'https://catcomfort.example.com', true, (SELECT user_id FROM public.users WHERE email = 'provider@example.com'))
-) AS v(name, description, address, phone, email, website, is_verified, user_id)
-WHERE NOT EXISTS (
-SELECT 1 FROM public.breeders b WHERE b.name = v.name
-);
+
 -- 30. DUMMY EVENT CATEGORIES
 INSERT INTO public.event_categories (name, description, icon, color) VALUES
 ('Adoption & Rescue', 'Events focused on adoption and animal rescue.', '❤️', '#EF4444'),
