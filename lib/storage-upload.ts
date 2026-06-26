@@ -24,10 +24,14 @@ function sanitizeFileName(fileName: string): string {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function isBucketNotFound(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes('not found') || m.includes('does not exist') || m.includes('bucket not found');
+}
+
 export async function ensureAnimalImageBucketExists() {
   if (bucketEnsured) return;
 
-  // Try RPC first (security definer, bypasses RLS)
   const { error: rpcError } = await supabaseAdmin.rpc('create_storage_bucket', {
     bucket_id: ANIMAL_IMAGE_BUCKET,
     bucket_name: ANIMAL_IMAGE_BUCKET,
@@ -39,7 +43,6 @@ export async function ensureAnimalImageBucketExists() {
     return;
   }
 
-  // RPC function not deployed yet — fall back to Storage API
   const fnMissing =
     rpcError.message?.toLowerCase().includes('function not found') ||
     rpcError.message?.toLowerCase().includes('does not exist');
@@ -78,7 +81,30 @@ export async function uploadAnimalImage(file: File, folder = 'uploads') {
   });
 
   if (uploadError) {
-    throw new Error(uploadError.message);
+    if (isBucketNotFound(uploadError.message)) {
+      bucketEnsured = false;
+      await ensureAnimalImageBucketExists();
+
+      const retryPath = `${sanitizedFolder}/${Date.now()}-${sanitizeFileName(file.name)}`;
+      const { error: retryError } = await supabaseAdmin.storage.from(ANIMAL_IMAGE_BUCKET).upload(retryPath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      });
+
+      if (retryError) {
+        throw new Error(retryError.message);
+      }
+
+      const { data: retryUrlData } = supabaseAdmin.storage.from(ANIMAL_IMAGE_BUCKET).getPublicUrl(retryPath);
+      if (!retryUrlData?.publicUrl) {
+        throw new Error('Failed to generate public URL for uploaded image');
+      }
+
+      return { url: retryUrlData.publicUrl, path: retryPath };
+    } else {
+      throw new Error(uploadError.message);
+    }
   }
 
   const { data: publicUrlData } = supabaseAdmin.storage.from(ANIMAL_IMAGE_BUCKET).getPublicUrl(path);
