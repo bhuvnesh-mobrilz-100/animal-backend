@@ -2,6 +2,8 @@ import { supabaseAdmin } from '@/lib/server-supabase';
 
 export const ANIMAL_IMAGE_BUCKET = 'animalclickposts';
 
+let bucketEnsured = false;
+
 export function extractAnimalImagePathFromUrl(url: string): string | null {
   try {
     const parsedUrl = new URL(url);
@@ -23,34 +25,43 @@ function sanitizeFileName(fileName: string): string {
 }
 
 export async function ensureAnimalImageBucketExists() {
-  const { data: bucket, error: getError } = await supabaseAdmin.storage.getBucket(
-    ANIMAL_IMAGE_BUCKET
-  );
+  if (bucketEnsured) return;
 
-  if (bucket) {
-    if (!bucket.public) {
-      const { error: updateError } = await supabaseAdmin.storage.updateBucket(ANIMAL_IMAGE_BUCKET, {
-        public: true,
-      });
-      if (updateError) {
-        console.warn('Failed to update bucket to public:', updateError.message);
-      }
-    }
+  // Try RPC first (security definer, bypasses RLS)
+  const { error: rpcError } = await supabaseAdmin.rpc('create_storage_bucket', {
+    bucket_id: ANIMAL_IMAGE_BUCKET,
+    bucket_name: ANIMAL_IMAGE_BUCKET,
+    is_public: true,
+  });
+
+  if (!rpcError) {
+    bucketEnsured = true;
     return;
   }
 
-  const { error: createError } = await supabaseAdmin.storage.createBucket(ANIMAL_IMAGE_BUCKET, {
-    public: true,
-  });
+  // RPC function not deployed yet — fall back to Storage API
+  const fnMissing =
+    rpcError.message?.toLowerCase().includes('function not found') ||
+    rpcError.message?.toLowerCase().includes('does not exist');
 
-  if (createError) {
-    if (createError.message?.toLowerCase().includes('already exists')) {
+  if (fnMissing) {
+    const { error: apiError } = await supabaseAdmin.storage.createBucket(ANIMAL_IMAGE_BUCKET, {
+      public: true,
+    });
+
+    if (!apiError || apiError.message?.toLowerCase().includes('already exists')) {
+      bucketEnsured = true;
       return;
     }
+
     throw new Error(
-      `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${createError.message}`
+      `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${apiError.message}`
     );
   }
+
+  throw new Error(
+    `Unable to create storage bucket ${ANIMAL_IMAGE_BUCKET}: ${rpcError.message}`
+  );
 }
 
 export async function uploadAnimalImage(file: File, folder = 'uploads') {
